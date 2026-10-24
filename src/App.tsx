@@ -1,0 +1,504 @@
+import React, { useState, useEffect } from 'react';
+import {
+  NavigationItem,
+  Guild,
+  BossEncounter,
+  Quest,
+  GuildMember,
+  ActivityItem,
+  StudyRoom,
+  UserProfile
+} from './types';
+import {
+  INITIAL_USER,
+  INITIAL_GUILDS,
+  INITIAL_BOSS,
+  INITIAL_QUESTS,
+  INITIAL_MEMBERS,
+  INITIAL_ACTIVITIES,
+  INITIAL_STUDY_ROOM
+} from './data/mockData';
+
+import { LeftSidebar } from './components/layout/LeftSidebar';
+import { TopNavbar } from './components/layout/TopNavbar';
+import { RightSidebar } from './components/layout/RightSidebar';
+import { Footer } from './components/layout/Footer';
+
+import { GuildHallView } from './components/views/GuildHallView';
+import { QuestsView } from './components/views/QuestsView';
+import { BossArenaView } from './components/views/BossArenaView';
+import { StudyRoomsView } from './components/views/StudyRoomsView';
+import { AchievementsView } from './components/views/AchievementsView';
+import { FriendsView } from './components/views/FriendsView';
+import { SettingsView } from './components/views/SettingsView';
+import { NotFoundView } from './components/views/NotFoundView';
+
+import { CreateGuildModal } from './components/modals/CreateGuildModal';
+import { HintChallengeModal } from './components/modals/HintChallengeModal';
+import { QuestDetailModal } from './components/modals/QuestDetailModal';
+import { StudyRoomModal } from './components/modals/StudyRoomModal';
+import { CodexModal } from './components/modals/CodexModal';
+import { MemberPopoutMenu } from './components/modals/MemberPopoutMenu';
+import { ToastContainer, ToastMessage } from './components/common/Toast';
+
+import confetti from 'canvas-confetti';
+
+export const App: React.FC = () => {
+  // Navigation & View State
+  const [currentTab, setCurrentTab] = useState<NavigationItem>('guild_hall');
+  const [selectedGuildId, setSelectedGuildId] = useState<string>('shadow-protocol');
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Mobile Drawer States
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const [isMobileMembersOpen, setIsMobileMembersOpen] = useState(false);
+
+  // Domain State
+  const [user, setUser] = useState<UserProfile>(INITIAL_USER);
+  const [guilds, setGuilds] = useState<Guild[]>(INITIAL_GUILDS);
+  const [boss, setBoss] = useState<BossEncounter>(INITIAL_BOSS);
+  const [quests, setQuests] = useState<Quest[]>(INITIAL_QUESTS);
+  const [members] = useState<GuildMember[]>(INITIAL_MEMBERS);
+  const [activities, setActivities] = useState<ActivityItem[]>(INITIAL_ACTIVITIES);
+  const [studyRoom] = useState<StudyRoom>(INITIAL_STUDY_ROOM);
+
+  // Modals & Popouts State
+  const [isCreateGuildOpen, setIsCreateGuildOpen] = useState(false);
+  const [mentorModal, setMentorModal] = useState<{ isOpen: boolean; mode: 'hint' | 'challenge' }>({
+    isOpen: false,
+    mode: 'hint'
+  });
+  const [selectedQuest, setSelectedQuest] = useState<Quest | null>(null);
+  const [isQuestModalOpen, setIsQuestModalOpen] = useState(false);
+  const [isStudyRoomModalOpen, setIsStudyRoomModalOpen] = useState(false);
+  const [codexModal, setCodexModal] = useState<{ isOpen: boolean; type: 'codex' | 'patch_notes' }>({
+    isOpen: false,
+    type: 'codex'
+  });
+  const [selectedMemberForPopout, setSelectedMemberForPopout] = useState<GuildMember | null>(null);
+
+  // Toast System
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const addToast = (type: ToastMessage['type'], title: string, description?: string) => {
+    const id = `toast-${Date.now()}-${Math.random()}`;
+    setToasts((prev) => [...prev, { id, type, title, description }]);
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 4500);
+  };
+
+  const removeToast = (id: string) => {
+    setToasts((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  // Selected Guild
+  const activeGuild = guilds.find((g) => g.id === selectedGuildId) || guilds[0];
+
+  // Dynamic Document Title based on current tab & guild
+  useEffect(() => {
+    const titles: Record<NavigationItem, string> = {
+      guild_hall: `GuildUp — ${activeGuild.name} (Guild Hall)`,
+      quests: 'GuildUp — Active Quests & Curriculum Board',
+      boss_arena: `GuildUp — Boss Raid: ${boss.name}`,
+      study_rooms: `GuildUp — ${studyRoom.name} (Focus Sanctuary)`,
+      achievements: 'GuildUp — Adventurer Achievements & Badges',
+      friends: 'GuildUp — Party Roster & Friends',
+      settings: 'GuildUp — Platform & Profile Settings',
+      '404': 'GuildUp — 404: Rune Not Found'
+    };
+    document.title = titles[currentTab] || 'GuildUp — Your party. Your quest. Your next level.';
+  }, [currentTab, activeGuild.name, boss.name, studyRoom.name]);
+
+  // User XP progression helper
+  const awardUserXp = (amount: number, reason: string) => {
+    setUser((prev) => {
+      const nextXp = prev.currentXp + amount;
+      if (nextXp >= prev.maxXp) {
+        confetti({ particleCount: 120, spread: 80, origin: { y: 0.6 } });
+        addToast(
+          'achievement',
+          `LEVEL UP! Level ${prev.level + 1} Reached!`,
+          `Congratulations! You gained +${amount} XP from ${reason}.`
+        );
+        return {
+          ...prev,
+          level: prev.level + 1,
+          currentXp: nextXp - prev.maxXp,
+          maxXp: Math.round(prev.maxXp * 1.25)
+        };
+      } else {
+        addToast('success', `+${amount} XP Earned`, reason);
+        return { ...prev, currentXp: nextXp };
+      }
+    });
+
+    // Also contribute to Guild XP
+    setGuilds((prev) =>
+      prev.map((g) =>
+        g.id === selectedGuildId
+          ? { ...g, currentXp: Math.min(g.maxXp, g.currentXp + amount) }
+          : g
+      )
+    );
+  };
+
+  // Guild Selection Handler
+  const handleSelectGuild = (guildId: string) => {
+    setSelectedGuildId(guildId);
+    const target = guilds.find((g) => g.id === guildId);
+    if (target) {
+      addToast('info', `Switched to ${target.name}`, target.description);
+    }
+  };
+
+  // Create Guild Handler
+  const handleCreateGuild = (newGuild: Guild) => {
+    setGuilds((prev) => [newGuild, ...prev]);
+    setSelectedGuildId(newGuild.id);
+    addToast('success', `Guild Founded: ${newGuild.name}!`, 'Your party is ready for new adventurers.');
+  };
+
+  // Join Guild by Code Handler
+  const handleJoinGuildCode = (code: string): boolean => {
+    const match = guilds.find(
+      (g) => g.tag.toLowerCase() === code.toLowerCase() || g.name.toLowerCase().includes(code.toLowerCase())
+    );
+    if (match) {
+      setSelectedGuildId(match.id);
+      addToast('success', `Joined Guild: ${match.name}!`, `Welcome to the ${match.name} roster.`);
+      return true;
+    }
+    return false;
+  };
+
+  // Quest Actions
+  const handleOpenQuest = (quest: Quest) => {
+    setSelectedQuest(quest);
+    setIsQuestModalOpen(true);
+  };
+
+  const handleToggleQuestStep = (questId: string, stepId: number) => {
+    setQuests((prev) =>
+      prev.map((q) => {
+        if (q.id !== questId) return q;
+        const updatedSteps = q.steps.map((s) => (s.id === stepId ? { ...s, completed: !s.completed } : s));
+        const completedCount = updatedSteps.filter((s) => s.completed).length;
+        const isDone = completedCount === updatedSteps.length;
+        return {
+          ...q,
+          steps: updatedSteps,
+          progress: completedCount,
+          completed: isDone
+        };
+      })
+    );
+
+    if (selectedQuest && selectedQuest.id === questId) {
+      setSelectedQuest((prev) => {
+        if (!prev) return null;
+        const updatedSteps = prev.steps.map((s) => (s.id === stepId ? { ...s, completed: !s.completed } : s));
+        const completedCount = updatedSteps.filter((s) => s.completed).length;
+        return {
+          ...prev,
+          steps: updatedSteps,
+          progress: completedCount,
+          completed: completedCount === updatedSteps.length
+        };
+      });
+    }
+
+    addToast('info', 'Quest Objective Updated');
+  };
+
+  const handleCompleteQuest = (quest: Quest) => {
+    setQuests((prev) =>
+      prev.map((q) => (q.id === quest.id ? { ...q, completed: true, progress: q.maxProgress } : q))
+    );
+
+    awardUserXp(quest.rewardXp, `clearing ${quest.title}`);
+
+    const newActivity: ActivityItem = {
+      id: `act-${Date.now()}`,
+      userName: user.name,
+      userAvatarSeed: user.avatarSeed,
+      userAvatarColor: user.avatarColor,
+      actionText: 'completed',
+      target: quest.title,
+      timestamp: 'Just now',
+      type: 'quest'
+    };
+    setActivities((prev) => [newActivity, ...prev]);
+  };
+
+  // Boss Actions
+  const handleBossDefeated = () => {
+    awardUserXp(400, 'shattering Phase 2 of The Query Devourer');
+    setBoss((prev) => ({
+      ...prev,
+      overallProgress: 100,
+      currentPhase: {
+        ...prev.currentPhase,
+        bossHp: 0,
+        status: 'completed'
+      }
+    }));
+
+    const newActivity: ActivityItem = {
+      id: `act-${Date.now()}`,
+      userName: user.name,
+      userAvatarSeed: user.avatarSeed,
+      userAvatarColor: user.avatarColor,
+      actionText: 'defeated Phase 2 of',
+      target: 'The Query Devourer',
+      timestamp: 'Just now',
+      type: 'boss'
+    };
+    setActivities((prev) => [newActivity, ...prev]);
+  };
+
+  // Render Central Content based on current navigation tab
+  const renderCentralWorkspace = () => {
+    switch (currentTab) {
+      case 'quests':
+        return (
+          <QuestsView
+            quests={quests}
+            onSelectQuest={handleOpenQuest}
+            onBackToGuildHall={() => setCurrentTab('guild_hall')}
+            onQuestAction={handleOpenQuest}
+          />
+        );
+
+      case 'boss_arena':
+        return (
+          <BossArenaView
+            boss={boss}
+            user={user}
+            onBackToGuildHall={() => setCurrentTab('guild_hall')}
+            onBossDefeated={handleBossDefeated}
+          />
+        );
+
+      case 'study_rooms':
+        return <StudyRoomsView studyRoom={studyRoom} user={user} />;
+
+      case 'achievements':
+        return <AchievementsView />;
+
+      case 'friends':
+        return (
+          <FriendsView
+            members={members}
+            onInviteToStudy={(m) => {
+              addToast('success', `Study Invite Dispatched to ${m.name}!`);
+            }}
+          />
+        );
+
+      case 'settings':
+        return (
+          <SettingsView
+            user={user}
+            onUpdateUser={(updated) => {
+              setUser((prev) => ({ ...prev, ...updated }));
+              addToast('success', 'Profile Preferences Updated');
+            }}
+          />
+        );
+
+      case '404':
+        return <NotFoundView onNavigate={(tab) => setCurrentTab(tab)} />;
+
+      case 'guild_hall':
+      default:
+        return (
+          <GuildHallView
+            guild={activeGuild}
+            boss={boss}
+            quests={quests}
+            activities={activities}
+            user={user}
+            onEnterBossArena={() => setCurrentTab('boss_arena')}
+            onSelectQuest={handleOpenQuest}
+            onViewAllQuests={() => setCurrentTab('quests')}
+            onQuestAction={handleOpenQuest}
+            onViewRoster={() => setCurrentTab('friends')}
+          />
+        );
+    }
+  };
+
+  return (
+    <div className="flex h-screen w-screen overflow-x-hidden overflow-y-hidden bg-[#070b13] text-slate-100 font-sans relative">
+      {/* 1. DESKTOP LEFT SIDEBAR (250px) */}
+      <LeftSidebar
+        currentTab={currentTab}
+        onSelectTab={(tab) => setCurrentTab(tab)}
+        selectedGuildId={selectedGuildId}
+        onSelectGuild={handleSelectGuild}
+        guilds={guilds}
+        user={user}
+        onCreateGuildClick={() => setIsCreateGuildOpen(true)}
+      />
+
+      {/* MOBILE NAVIGATION DRAWER */}
+      {isMobileNavOpen && (
+        <div className="fixed inset-0 z-50 flex lg:hidden">
+          {/* Backdrop */}
+          <div
+            onClick={() => setIsMobileNavOpen(false)}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
+          />
+          <div className="relative z-10 h-full">
+            <LeftSidebar
+              currentTab={currentTab}
+              onSelectTab={(tab) => {
+                setCurrentTab(tab);
+                setIsMobileNavOpen(false);
+              }}
+              selectedGuildId={selectedGuildId}
+              onSelectGuild={(id) => {
+                handleSelectGuild(id);
+                setIsMobileNavOpen(false);
+              }}
+              guilds={guilds}
+              user={user}
+              onCreateGuildClick={() => {
+                setIsCreateGuildOpen(true);
+                setIsMobileNavOpen(false);
+              }}
+              onCloseMobile={() => setIsMobileNavOpen(false)}
+              isMobileDrawer
+            />
+          </div>
+        </div>
+      )}
+
+      {/* 2. CENTRAL WORKSPACE AREA WITH TOP NAVBAR */}
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-x-hidden overflow-y-hidden">
+        {/* Top Slim Application Bar */}
+        <TopNavbar
+          user={user}
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          onOpenSettings={() => setCurrentTab('settings')}
+          onToggleMobileMenu={() => setIsMobileNavOpen(true)}
+          onToggleMobileMembers={() => setIsMobileMembersOpen(true)}
+          onNavigateHome={() => setCurrentTab('guild_hall')}
+        />
+
+        {/* Central Scrollable Workspace */}
+        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-[#070b13] relative flex flex-col justify-between">
+          <div className="flex-1">
+            {renderCentralWorkspace()}
+          </div>
+
+          {/* Minimalist Functional Footer */}
+          <Footer
+            onOpenCodex={() => setCodexModal({ isOpen: true, type: 'codex' })}
+            onOpenPatchNotes={() => setCodexModal({ isOpen: true, type: 'patch_notes' })}
+            onNavigateTo404={() => setCurrentTab('404')}
+            onReportBug={() => addToast('info', 'Bug Bounty Active', 'Telemetry logs are operating normally.')}
+          />
+        </main>
+      </div>
+
+      {/* 3. DESKTOP RIGHT SIDEBAR (330px) */}
+      <RightSidebar
+        members={members}
+        studyRoom={studyRoom}
+        onJoinStudyRoom={() => setIsStudyRoomModalOpen(true)}
+        onOpenMentorHint={() => setMentorModal({ isOpen: true, mode: 'hint' })}
+        onOpenMentorChallenge={() => setMentorModal({ isOpen: true, mode: 'challenge' })}
+        onMemberClick={(member) => setSelectedMemberForPopout(member)}
+      />
+
+      {/* MOBILE RIGHT MEMBERS DRAWER */}
+      {isMobileMembersOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end xl:hidden">
+          <div
+            onClick={() => setIsMobileMembersOpen(false)}
+            className="fixed inset-0 bg-black/80 backdrop-blur-sm transition-opacity"
+          />
+          <div className="relative z-10 h-full">
+            <RightSidebar
+              members={members}
+              studyRoom={studyRoom}
+              onJoinStudyRoom={() => {
+                setIsStudyRoomModalOpen(true);
+                setIsMobileMembersOpen(false);
+              }}
+              onOpenMentorHint={() => {
+                setMentorModal({ isOpen: true, mode: 'hint' });
+                setIsMobileMembersOpen(false);
+              }}
+              onOpenMentorChallenge={() => {
+                setMentorModal({ isOpen: true, mode: 'challenge' });
+                setIsMobileMembersOpen(false);
+              }}
+              onMemberClick={(member) => {
+                setSelectedMemberForPopout(member);
+                setIsMobileMembersOpen(false);
+              }}
+              onCloseMobile={() => setIsMobileMembersOpen(false)}
+              isMobileDrawer
+            />
+          </div>
+        </div>
+      )}
+
+      {/* MODALS */}
+      <CreateGuildModal
+        isOpen={isCreateGuildOpen}
+        onClose={() => setIsCreateGuildOpen(false)}
+        onCreateGuild={handleCreateGuild}
+        onJoinGuildCode={handleJoinGuildCode}
+        onError={(err) => addToast('error', 'Guild Action Failed', err)}
+      />
+
+      <HintChallengeModal
+        isOpen={mentorModal.isOpen}
+        mode={mentorModal.mode}
+        onClose={() => setMentorModal((prev) => ({ ...prev, isOpen: false }))}
+        onRewardXp={(amt) => awardUserXp(amt, 'correctly solving Astra’s challenge')}
+      />
+
+      <QuestDetailModal
+        quest={selectedQuest}
+        isOpen={isQuestModalOpen}
+        onClose={() => setIsQuestModalOpen(false)}
+        onToggleStep={handleToggleQuestStep}
+        onCompleteQuest={handleCompleteQuest}
+      />
+
+      <StudyRoomModal
+        isOpen={isStudyRoomModalOpen}
+        onClose={() => setIsStudyRoomModalOpen(false)}
+        studyRoom={studyRoom}
+        user={user}
+      />
+
+      <CodexModal
+        isOpen={codexModal.isOpen}
+        type={codexModal.type}
+        onClose={() => setCodexModal((prev) => ({ ...prev, isOpen: false }))}
+      />
+
+      {/* POPOUT MENU FOR MEMBERS */}
+      <MemberPopoutMenu
+        member={selectedMemberForPopout}
+        isOpen={!!selectedMemberForPopout}
+        onClose={() => setSelectedMemberForPopout(null)}
+        onWhisper={(m) => addToast('info', `Whisper initiated with ${m.name}`, 'Secure party channel opened.')}
+        onInviteToStudy={(m) => addToast('success', `Study Sanctuary invite sent to ${m.name}`)}
+        onChallengeDuel={(m) => addToast('achievement', `SQL Duel challenged to ${m.name}!`, 'Waiting for opponent response.')}
+      />
+
+      {/* TOAST SYSTEM */}
+      <ToastContainer toasts={toasts} onDismiss={removeToast} />
+    </div>
+  );
+};
+
+export default App;

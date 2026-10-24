@@ -41,6 +41,7 @@ export const Avatar: React.FC<AvatarProps> = ({
   const renderAnimeSvg = () => {
     switch (normSeed) {
       case 'ishant':
+      case 'ishant phadatare':
         // Rune Architect - Cyan-tinted spiky/styled hair, focused anime eyes, glowing runic monocle/earpiece
         return (
           <svg viewBox="0 0 64 64" className="w-full h-full" fill="none">
@@ -93,6 +94,8 @@ export const Avatar: React.FC<AvatarProps> = ({
           </svg>
         );
 
+      case 'aviral':
+      case 'aviral maurya':
       case 'akira':
         // Shadow Scholar - Deep midnight navy hair, analytical wire glasses, calm gaze
         return (
@@ -116,6 +119,8 @@ export const Avatar: React.FC<AvatarProps> = ({
           </svg>
         );
 
+      case 'ajay':
+      case 'ajay gurjar':
       case 'mika':
         // Arcane Healer - Soft violet hair, delicate side ribbon, emerald/violet aura
         return (
@@ -136,6 +141,8 @@ export const Avatar: React.FC<AvatarProps> = ({
           </svg>
         );
 
+      case 'eknaath':
+      case 'eknaath bawane':
       case 'ren':
         // Blade of Logic - Fiery crimson tint / energetic anime spike hair
         return (

@@ -1,205 +1,336 @@
-import React, { useState, useEffect } from 'react';
-import { Headphones, Volume2, Mic, MicOff, Users, Play, Pause, RotateCcw, MessageSquare, Send, Sparkles } from 'lucide-react';
+import React, { useState } from 'react';
+import {
+  Headphones,
+  Users,
+  ExternalLink,
+  Plus,
+  Radio,
+  Monitor,
+  PenTool,
+  Gamepad2,
+  Sparkles,
+  ArrowRight,
+  Shield,
+  Search,
+  CheckCircle2,
+  Clock,
+  PhoneOff
+} from 'lucide-react';
 import { StudyRoom, UserProfile } from '../../types';
 import { Avatar } from '../common/Avatar';
+import { DedicatedStudyRoomView } from '../study/DedicatedStudyRoomView';
 
 interface StudyRoomsViewProps {
-  studyRoom: StudyRoom;
+  rooms: StudyRoom[];
   user: UserProfile;
+  activeRoomId?: string | null;
+  onSelectRoom: (roomId: string) => void;
+  onLeaveRoom: () => void;
+  onEndChamber?: (roomId: string) => void;
+  onOpenStudyChat?: () => void;
+  onRewardXp?: (amount: number, reason: string) => void;
+  onCreateRoom?: (newRoom: StudyRoom) => void;
 }
 
-export const StudyRoomsView: React.FC<StudyRoomsViewProps> = ({ studyRoom, user }) => {
-  const [timerSeconds, setTimerSeconds] = useState(25 * 60); // 25 min default pomodoro
-  const [isRunning, setIsRunning] = useState(false);
-  const [isMuted, setIsMuted] = useState(true);
-  const [ambientSound, setAmbientSound] = useState<'lofi' | 'rain' | 'whitenoise' | 'none'>('lofi');
-  const [chatMessages, setChatMessages] = useState<Array<{ sender: string; text: string; time: string; seed: string }>>([
-    { sender: 'Akira', text: 'Currently working through outer join edge cases in LeetCode #185.', time: '19:15', seed: 'akira' },
-    { sender: 'Kai', text: 'Remember to test against empty table partitions!', time: '19:18', seed: 'kai' },
-    { sender: 'Mika', text: 'Party XP boost is active (+15%). Keep it going!', time: '19:20', seed: 'mika' }
-  ]);
-  const [newMessage, setNewMessage] = useState('');
+export const StudyRoomsView: React.FC<StudyRoomsViewProps> = ({
+  rooms,
+  user,
+  activeRoomId,
+  onSelectRoom,
+  onLeaveRoom,
+  onEndChamber,
+  onOpenStudyChat,
+  onRewardXp,
+  onCreateRoom
+}) => {
+  const [filterQuery, setFilterQuery] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const [newRoomName, setNewRoomName] = useState('');
+  const [newRoomTopic, setNewRoomTopic] = useState('');
+  const [newRoomCapacity, setNewRoomCapacity] = useState(6);
 
-  useEffect(() => {
-    let interval: any = null;
-    if (isRunning && timerSeconds > 0) {
-      interval = setInterval(() => {
-        setTimerSeconds((prev) => prev - 1);
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isRunning, timerSeconds]);
+  // If a room is currently active, render the dedicated room view with its own navigation
+  const activeRoom = rooms.find((r) => r.id === activeRoomId);
 
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  if (activeRoom) {
+    return (
+      <DedicatedStudyRoomView
+        studyRoom={activeRoom}
+        user={user}
+        onLeaveRoom={onLeaveRoom}
+        onEndChamber={() => onEndChamber?.(activeRoom.id)}
+        onRewardXp={onRewardXp}
+      />
+    );
+  }
+
+  const handleOpenInNewTab = (e: React.MouseEvent, roomId: string) => {
+    e.stopPropagation();
+    const url = `${window.location.origin}${window.location.pathname}?room=${roomId}`;
+    window.open(url, '_blank');
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newMessage.trim()) return;
+    if (!newRoomName.trim() || !newRoomTopic.trim()) return;
 
-    setChatMessages((prev) => [
-      ...prev,
-      {
-        sender: user.name,
-        text: newMessage.trim(),
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        seed: user.avatarSeed
-      }
-    ]);
-    setNewMessage('');
+    const newChamber: StudyRoom = {
+      id: `room-${Date.now()}`,
+      name: newRoomName.trim(),
+      topic: newRoomTopic.trim(),
+      onlineCount: 1,
+      maxCapacity: newRoomCapacity,
+      initialTimeSeconds: 25 * 60,
+      tag: 'Custom',
+      description: `Collaborative focus chamber dedicated to ${newRoomTopic.trim()}.`,
+      isScreenSharing: false,
+      activeMembers: [{ name: user.name, avatarSeed: user.avatarSeed, avatarColor: '#14b8a6' }],
+      isLive: true
+    };
+
+    onCreateRoom?.(newChamber);
+    setIsCreating(false);
+    setNewRoomName('');
+    setNewRoomTopic('');
+    onSelectRoom(newChamber.id);
   };
+
+  const filteredRooms = rooms.filter(
+    (r) =>
+      r.name.toLowerCase().includes(filterQuery.toLowerCase()) ||
+      r.topic.toLowerCase().includes(filterQuery.toLowerCase()) ||
+      (r.tag && r.tag.toLowerCase().includes(filterQuery.toLowerCase()))
+  );
 
   return (
-    <div className="space-y-5 p-4 sm:p-6 max-w-6xl mx-auto">
-      {/* Top Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-[#1c2944]">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-cyan-950 border border-cyan-500/50 flex items-center justify-center text-cyan-400 shadow-[0_0_15px_rgba(6,182,212,0.25)]">
-            <Headphones className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg font-bold text-white">{studyRoom.name}</h1>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 font-semibold">
-                ● Live Voice Session
-              </span>
+    <div className="space-y-6 p-4 sm:p-8 max-w-6xl mx-auto">
+      {/* Top Header Directory Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-[#182030]">
+        <div>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-teal-950 border border-teal-500/40 flex items-center justify-center text-teal-400 shadow-sm">
+              <Headphones className="w-5 h-5" />
             </div>
-            <p className="text-xs text-slate-400">Collaborative deep-focus study chamber for SQL mastery</p>
+            <div>
+              <h1 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+                <span>Study Chambers & Virtual Rooms</span>
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-teal-950 text-teal-300 border border-teal-800 font-semibold">
+                  Live Rooms
+                </span>
+              </h1>
+              <p className="text-xs text-slate-400 mt-0.5">
+                Join an active collaborative session, screen share code, sketch on whiteboards, and play breaktime mini-games.
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Ambient controls */}
-        <div className="flex items-center gap-2">
+        {/* Action Buttons: Create Chamber & Search */}
+        <div className="flex items-center gap-2.5 flex-wrap">
           <button
-            onClick={() => setIsMuted(!isMuted)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-inner text-xs font-semibold border transition-all ${
-              isMuted
-                ? 'bg-[#1a1c29] text-rose-300 border-rose-800/60'
-                : 'bg-cyan-950 text-cyan-300 border-cyan-800'
-            }`}
+            onClick={() => setIsCreating(true)}
+            className="flex items-center gap-2 px-3.5 py-2 rounded-inner bg-teal-500 hover:bg-teal-400 text-[#070b13] font-bold text-xs transition-all shadow-sm active:scale-95"
           >
-            {isMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
-            <span>{isMuted ? 'Muted' : 'Speaking'}</span>
+            <Plus className="w-4 h-4" />
+            <span>Create Chamber</span>
           </button>
         </div>
       </div>
 
-      {/* Main Grid: Left Pomodoro & Members, Right Chat */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-        {/* Left Focus Room (7 cols) */}
-        <div className="lg:col-span-7 space-y-4">
-          {/* Pomodoro Timer Center */}
-          <div className="rounded-card bg-[#0e172d] border border-[#1e2d4d] p-6 text-center shadow-panel">
-            <span className="text-xs font-mono uppercase tracking-wider text-cyan-400 font-semibold">
-              Focus Session Timer
-            </span>
-            <div className="text-5xl font-mono font-black text-white tracking-widest my-4">
-              {formatTime(timerSeconds)}
-            </div>
+      {/* Search & Stats Strip */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#0d121e] border border-[#1a2333] p-3 rounded-card">
+        <div className="flex items-center gap-2 flex-1 max-w-md bg-[#111724] border border-[#1b2538] rounded-inner px-3 py-1.5 text-xs text-slate-200">
+          <Search className="w-3.5 h-3.5 text-slate-500" />
+          <input
+            type="text"
+            value={filterQuery}
+            onChange={(e) => setFilterQuery(e.target.value)}
+            placeholder="Search by topic, algorithms, SQL, Python..."
+            className="w-full bg-transparent border-none focus:outline-none placeholder-slate-500 text-xs"
+          />
+        </div>
 
-            <div className="flex items-center justify-center gap-3">
-              <button
-                onClick={() => setIsRunning(!isRunning)}
-                className="flex items-center gap-2 px-5 py-2 rounded-inner bg-cyan-500 hover:bg-cyan-400 text-[#070b13] font-bold text-xs shadow-[0_0_15px_rgba(6,182,212,0.3)] transition-all active:scale-[0.98]"
-              >
-                {isRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                <span>{isRunning ? 'Pause' : 'Start Focus'}</span>
-              </button>
-              <button
-                onClick={() => {
-                  setIsRunning(false);
-                  setTimerSeconds(25 * 60);
-                }}
-                className="p-2 rounded-inner bg-[#14213d] hover:bg-[#1a2d54] text-slate-400 hover:text-white border border-[#23355b] transition-colors"
-                title="Reset Timer"
-              >
-                <RotateCcw className="w-4 h-4" />
-              </button>
-            </div>
+        <div className="flex items-center gap-4 text-xs font-mono text-slate-400">
+          <span>{rooms.length} Active Chambers</span>
+          <span>•</span>
+          <span className="text-teal-400 flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
+            {rooms.reduce((acc, r) => acc + r.onlineCount, 0)} Adventurers Online
+          </span>
+        </div>
+      </div>
 
-            <div className="mt-4 pt-4 border-t border-[#18243e] flex items-center justify-center gap-2 text-xs text-slate-400">
-              <Volume2 className="w-3.5 h-3.5 text-cyan-400" />
-              <span>Ambient Sound:</span>
-              {(['lofi', 'rain', 'whitenoise', 'none'] as const).map((amb) => (
-                <button
-                  key={amb}
-                  onClick={() => setAmbientSound(amb)}
-                  className={`px-2 py-0.5 rounded text-[10px] font-mono capitalize ${
-                    ambientSound === amb ? 'bg-cyan-950 text-cyan-300 border border-cyan-800' : 'hover:text-white'
-                  }`}
-                >
-                  {amb}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Active Participants in Room */}
-          <div className="rounded-card bg-[#0e162b] border border-[#1d2b4a] p-4">
-            <div className="flex items-center justify-between pb-2 border-b border-[#18233c] mb-3">
-              <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
-                <Users className="w-3.5 h-3.5 text-cyan-400" />
-                Active Party Members (4/6)
-              </h3>
-              <span className="text-[10px] font-mono text-cyan-400 flex items-center gap-1">
-                <Sparkles className="w-3 h-3" /> +15% Party Aura
+      {/* Create Chamber Modal */}
+      {isCreating && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-[#0d121e] border border-[#1b2538] rounded-xl p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[#182030]">
+              <span className="text-sm font-bold text-white flex items-center gap-2">
+                <Plus className="w-4 h-4 text-teal-400" />
+                Found New Study Chamber
               </span>
+              <button
+                onClick={() => setIsCreating(false)}
+                className="text-slate-400 hover:text-white text-xs font-mono"
+              >
+                ✕
+              </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {studyRoom.activeMembers.map((m, i) => (
-                <div key={i} className="p-3 rounded-inner bg-[#111c33] border border-[#1e2f52] flex flex-col items-center text-center">
-                  <Avatar seed={m.avatarSeed} size="md" showStatus isOnline statusColor="bg-cyan-400" />
-                  <span className="text-xs font-semibold text-slate-200 mt-2">{m.name}</span>
-                  <span className="text-[10px] font-mono text-cyan-400 mt-0.5 flex items-center gap-1">
-                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" /> Listening
+            <form onSubmit={handleCreateSubmit} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Chamber Name</label>
+                <input
+                  type="text"
+                  required
+                  value={newRoomName}
+                  onChange={(e) => setNewRoomName(e.target.value)}
+                  placeholder="e.g. Neural Networks & LeetCode Sprint"
+                  className="w-full bg-[#111724] border border-[#1b2538] focus:border-teal-500 rounded-inner px-3 py-2 text-xs text-slate-200 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Curriculum Topic</label>
+                <input
+                  type="text"
+                  required
+                  value={newRoomTopic}
+                  onChange={(e) => setNewRoomTopic(e.target.value)}
+                  placeholder="e.g. Python AsyncIO & Event Loops"
+                  className="w-full bg-[#111724] border border-[#1b2538] focus:border-teal-500 rounded-inner px-3 py-2 text-xs text-slate-200 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Party Capacity</label>
+                <select
+                  value={newRoomCapacity}
+                  onChange={(e) => setNewRoomCapacity(Number(e.target.value))}
+                  className="w-full bg-[#111724] border border-[#1b2538] focus:border-teal-500 rounded-inner px-3 py-2 text-xs text-slate-200 focus:outline-none"
+                >
+                  <option value={4}>4 Adventurers (Intimate Focus)</option>
+                  <option value={6}>6 Adventurers (Standard Party)</option>
+                  <option value={8}>8 Adventurers (Raid Study)</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsCreating(false)}
+                  className="px-3 py-1.5 rounded-inner border border-[#1b2538] text-slate-400 hover:text-white text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-1.5 rounded-inner bg-teal-500 hover:bg-teal-400 text-[#070b13] font-bold text-xs"
+                >
+                  Open Chamber
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Study Chambers Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+        {filteredRooms.map((room) => {
+          return (
+            <div
+              key={room.id}
+              onClick={() => onSelectRoom(room.id)}
+              className="group rounded-card bg-[#0e131d] border border-[#1a2333] hover:border-teal-500/50 p-5 shadow-panel transition-all hover:bg-[#111824] cursor-pointer flex flex-col justify-between"
+            >
+              <div>
+                {/* Header */}
+                <div className="flex items-start justify-between gap-3 mb-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-[#141d2d] border border-teal-500/30 flex items-center justify-center text-teal-400 group-hover:border-teal-400 transition-colors">
+                      <Radio className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-sm font-bold text-white group-hover:text-teal-300 transition-colors">
+                          {room.name}
+                        </h3>
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      </div>
+                      <span className="text-[11px] font-mono text-teal-400">{room.topic}</span>
+                    </div>
+                  </div>
+
+                  {/* Chamber Action Buttons: End Chamber & Open in Separate Tab */}
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (confirm(`End chamber "${room.name}"? This closes the session for everyone and removes it from active virtual rooms.`)) {
+                          onEndChamber?.(room.id);
+                        }
+                      }}
+                      className="p-1.5 rounded-inner bg-[#141d2d] hover:bg-rose-950/70 border border-[#1e2c44] hover:border-rose-500/50 text-slate-400 hover:text-rose-300 transition-colors flex items-center gap-1 text-xs"
+                      title="End Chamber for everyone & remove from virtual rooms"
+                    >
+                      <PhoneOff className="w-3.5 h-3.5 text-rose-400" />
+                      <span className="text-[10px] hidden sm:inline">End Chamber</span>
+                    </button>
+
+                    <button
+                      onClick={(e) => handleOpenInNewTab(e, room.id)}
+                      className="p-1.5 rounded-inner bg-[#141d2d] hover:bg-[#1c2940] border border-[#1e2c44] text-slate-400 hover:text-teal-300 transition-colors flex items-center gap-1 text-xs"
+                      title="Open this room in a separate browser tab"
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                      <span className="text-[10px] hidden sm:inline">New Tab</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Description */}
+                <p className="text-xs text-slate-400 mb-4 leading-relaxed line-clamp-2">
+                  {room.description || 'Live quiet study sanctuary with pomodoro focus and collaborative scratchpad.'}
+                </p>
+
+                {/* Feature Tags Strip */}
+                <div className="flex items-center gap-2 flex-wrap mb-4">
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#131b2c] border border-[#1f2d44] text-teal-300 flex items-center gap-1">
+                    <Monitor className="w-3 h-3 text-teal-400" /> Screen Share
+                  </span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#131b2c] border border-[#1f2d44] text-cyan-300 flex items-center gap-1">
+                    <PenTool className="w-3 h-3 text-cyan-400" /> Whiteboard
+                  </span>
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-[#131b2c] border border-[#1f2d44] text-amber-300 flex items-center gap-1">
+                    <Gamepad2 className="w-3 h-3 text-amber-400" /> Mini-Games
                   </span>
                 </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Right Shared Notes & Study Chat (5 cols) */}
-        <div className="lg:col-span-5 rounded-card bg-[#0b1222] border border-[#192640] p-4 flex flex-col h-[520px]">
-          <div className="pb-3 border-b border-[#18233a] flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-cyan-400" />
-            <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider">
-              Study Room Scratchpad & Chat
-            </h3>
-          </div>
-
-          <div className="flex-1 overflow-y-auto space-y-2.5 py-3 pr-1">
-            {chatMessages.map((msg, i) => (
-              <div key={i} className="p-2.5 rounded-inner bg-[#0f172a] border border-[#1b2842] text-xs">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-bold text-cyan-300">{msg.sender}</span>
-                  <span className="text-[10px] font-mono text-slate-500">{msg.time}</span>
-                </div>
-                <p className="text-slate-300 leading-relaxed text-[11px]">{msg.text}</p>
               </div>
-            ))}
-          </div>
 
-          <form onSubmit={handleSendMessage} className="pt-3 border-t border-[#18233a] flex gap-2">
-            <input
-              type="text"
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              placeholder="Share a SQL note or tip..."
-              className="flex-1 bg-[#090f1d] border border-[#1a2842] rounded-inner px-3 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500"
-            />
-            <button
-              type="submit"
-              className="p-2 rounded-inner bg-cyan-500 hover:bg-cyan-400 text-[#070b13] transition-colors"
-            >
-              <Send className="w-3.5 h-3.5" />
-            </button>
-          </form>
-        </div>
+              {/* Bottom Participant Avatars & Enter Button */}
+              <div className="pt-3 border-t border-[#161f2e] flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="flex -space-x-1.5">
+                    {room.activeMembers.map((m, i) => (
+                      <div key={i} className="ring-2 ring-[#0e131d] rounded-full">
+                        <Avatar seed={m.avatarSeed} size="xs" />
+                      </div>
+                    ))}
+                  </div>
+                  <span className="text-[11px] font-mono text-slate-400">
+                    {room.onlineCount}/{room.maxCapacity} Online
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-1.5 text-xs font-bold text-teal-400 group-hover:text-teal-300 group-hover:translate-x-1 transition-all">
+                  <span>Enter Chamber</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

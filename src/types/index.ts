@@ -1,8 +1,10 @@
 export type NavigationItem = 
   | 'guild_hall'
   | 'quests'
+  | 'leaderboard'
   | 'boss_arena'
   | 'study_rooms'
+  | 'study_chat'
   | 'achievements'
   | 'friends'
   | 'settings'
@@ -113,6 +115,21 @@ export interface StudyRoom {
     avatarColor: string;
   }[];
   isLive: boolean;
+  tag?: string;
+  description?: string;
+  isScreenSharing?: boolean;
+}
+
+export type StudyRoomTab = 'focus' | 'screenshare' | 'whiteboard' | 'games' | 'notes';
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  desc: string;
+  time: string;
+  unread: boolean;
+  type: 'boss' | 'study' | 'streak' | 'quest' | 'achievement' | 'party';
+  targetTab?: NavigationItem;
 }
 
 export interface Achievement {
@@ -142,4 +159,18 @@ export interface WeeklyProgressData {
   weeklyGoalXp: number;
   days: DayProgress[];
   multiplier: string;
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  userId: string;
+  name: string;
+  roleClass: string;
+  avatarSeed: string;
+  level: number;
+  weeklyXp: number;
+  studyHours: number;
+  questsCompleted: number;
+  streakDays: number;
+  isCurrentUser?: boolean;
 }

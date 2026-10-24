@@ -7,7 +7,8 @@ import {
   GuildMember,
   ActivityItem,
   StudyRoom,
-  UserProfile
+  UserProfile,
+  AppNotification
 } from './types';
 import {
   INITIAL_USER,
@@ -16,7 +17,10 @@ import {
   INITIAL_QUESTS,
   INITIAL_MEMBERS,
   INITIAL_ACTIVITIES,
-  INITIAL_STUDY_ROOM
+  INITIAL_STUDY_ROOM,
+  INITIAL_STUDY_ROOMS,
+  INITIAL_LEADERBOARD,
+  INITIAL_NOTIFICATIONS
 } from './data/mockData';
 
 import { LeftSidebar } from './components/layout/LeftSidebar';
@@ -26,8 +30,10 @@ import { Footer } from './components/layout/Footer';
 
 import { GuildHallView } from './components/views/GuildHallView';
 import { QuestsView } from './components/views/QuestsView';
+import { LeaderboardView } from './components/views/LeaderboardView';
 import { BossArenaView } from './components/views/BossArenaView';
 import { StudyRoomsView } from './components/views/StudyRoomsView';
+import { StudyChatView } from './components/views/StudyChatView';
 import { AchievementsView } from './components/views/AchievementsView';
 import { FriendsView } from './components/views/FriendsView';
 import { SettingsView } from './components/views/SettingsView';
@@ -39,6 +45,9 @@ import { QuestDetailModal } from './components/modals/QuestDetailModal';
 import { StudyRoomModal } from './components/modals/StudyRoomModal';
 import { CodexModal } from './components/modals/CodexModal';
 import { MemberPopoutMenu } from './components/modals/MemberPopoutMenu';
+import { WhisperModal } from './components/modals/WhisperModal';
+import { UserProfileModal } from './components/modals/UserProfileModal';
+import { FloatingVoiceWidget } from './components/study/FloatingVoiceWidget';
 import { ToastContainer, ToastMessage } from './components/common/Toast';
 
 import confetti from 'canvas-confetti';
@@ -48,6 +57,45 @@ export const App: React.FC = () => {
   const [currentTab, setCurrentTab] = useState<NavigationItem>('guild_hall');
   const [selectedGuildId, setSelectedGuildId] = useState<string>('shadow-protocol');
   const [searchQuery, setSearchQuery] = useState('');
+
+  // Light Mode / Dark Mode State with LocalStorage Persistence
+  const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('guildup_theme');
+      if (saved) return saved === 'dark';
+    } catch {
+      // ignore
+    }
+    return true; // default tranquil dark midnight theme
+  });
+
+  useEffect(() => {
+    try {
+      if (isDarkMode) {
+        document.documentElement.classList.add('dark');
+        document.documentElement.classList.remove('light');
+        localStorage.setItem('guildup_theme', 'dark');
+      } else {
+        document.documentElement.classList.remove('dark');
+        document.documentElement.classList.add('light');
+        localStorage.setItem('guildup_theme', 'light');
+      }
+    } catch {
+      // ignore
+    }
+  }, [isDarkMode]);
+
+  const handleToggleTheme = () => {
+    setIsDarkMode((prev) => {
+      const next = !prev;
+      addToast(
+        'info',
+        next ? 'Dark Theme Activated' : 'Light Theme Activated',
+        next ? 'Tranquil midnight study ambiance' : 'Crisp daylight study ambiance'
+      );
+      return next;
+    });
+  };
 
   // Mobile Drawer States
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
@@ -60,7 +108,109 @@ export const App: React.FC = () => {
   const [quests, setQuests] = useState<Quest[]>(INITIAL_QUESTS);
   const [members] = useState<GuildMember[]>(INITIAL_MEMBERS);
   const [activities, setActivities] = useState<ActivityItem[]>(INITIAL_ACTIVITIES);
-  const [studyRoom] = useState<StudyRoom>(INITIAL_STUDY_ROOM);
+  const [studyRooms, setStudyRooms] = useState<StudyRoom[]>(INITIAL_STUDY_ROOMS);
+  const [activeStudyRoomId, setActiveStudyRoomId] = useState<string | null>(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const room = urlParams.get('room');
+      if (room) return room;
+    } catch {
+      // ignore
+    }
+    return null;
+  });
+
+  // Check URL query param on mount and when popstate occurs
+  useEffect(() => {
+    try {
+      const checkUrlRoom = () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const room = urlParams.get('room');
+        if (room) {
+          setCurrentTab('study_rooms');
+          setActiveStudyRoomId(room);
+        }
+      };
+      checkUrlRoom();
+      window.addEventListener('popstate', checkUrlRoom);
+      return () => window.removeEventListener('popstate', checkUrlRoom);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const activeStudyRoom = studyRooms.find((r) => r.id === activeStudyRoomId) || studyRooms[0];
+  const studyRoom = activeStudyRoom;
+
+  // Active Voice Room Connection State (floating window in bottom right)
+  const [activeVoiceRoom, setActiveVoiceRoom] = useState<StudyRoom | null>(INITIAL_STUDY_ROOM);
+
+  // Notification Center State
+  const [notifications, setNotifications] = useState<AppNotification[]>(INITIAL_NOTIFICATIONS);
+
+  const handleSelectNotification = (notif: AppNotification) => {
+    // Mark as read
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notif.id ? { ...n, unread: false } : n))
+    );
+    // Navigate to target view if defined
+    if (notif.targetTab) {
+      setCurrentTab(notif.targetTab);
+      if (notif.targetTab === 'study_rooms' && !activeStudyRoomId) {
+        setActiveStudyRoomId(INITIAL_STUDY_ROOM.id);
+      }
+    }
+  };
+
+  const handleMarkAllNotificationsRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, unread: false })));
+    addToast('info', 'Notifications Marked Read', 'All alerts have been cleared from unread queue.');
+  };
+
+  const handleClearAllNotifications = () => {
+    setNotifications([]);
+    addToast('info', 'Notifications Cleared', 'All notification logs have been removed.');
+  };
+
+  const handleDeleteNotification = (id: string) => {
+    setNotifications((prev) => prev.filter((n) => n.id !== id));
+  };
+
+  const handleLeaveVoiceRoom = () => {
+    setActiveVoiceRoom(null);
+    addToast('info', 'Voice Disconnected', 'Left study room voice channel.');
+  };
+
+  const handleJoinVoiceRoom = (roomToJoin?: StudyRoom) => {
+    const target = roomToJoin || activeStudyRoom || studyRooms[0];
+    setActiveVoiceRoom(target);
+    addToast('success', 'Voice Connected', `Connected to ${target.name}`);
+  };
+
+  const handleEndChamber = (chamberId: string) => {
+    const target = studyRooms.find((r) => r.id === chamberId);
+    // Remove from studyRooms so it NEVER shows up in Study Chambers & Virtual Rooms section
+    setStudyRooms((prev) => prev.filter((r) => r.id !== chamberId));
+
+    if (activeStudyRoomId === chamberId) {
+      setActiveStudyRoomId(null);
+      try {
+        if (window.history.pushState) {
+          window.history.pushState({}, '', window.location.pathname);
+        }
+      } catch {
+        // ignore
+      }
+    }
+    if (activeVoiceRoom?.id === chamberId) {
+      setActiveVoiceRoom(null);
+    }
+    addToast(
+      'info',
+      'Chamber Ended',
+      `"${target?.name || 'Study Chamber'}" has ended and was removed from virtual rooms.`
+    );
+  };
 
   // Modals & Popouts State
   const [isCreateGuildOpen, setIsCreateGuildOpen] = useState(false);
@@ -76,6 +226,9 @@ export const App: React.FC = () => {
     type: 'codex'
   });
   const [selectedMemberForPopout, setSelectedMemberForPopout] = useState<GuildMember | null>(null);
+  const [activeWhisperMember, setActiveWhisperMember] = useState<GuildMember | null>(null);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [leaderboard, setLeaderboard] = useState(INITIAL_LEADERBOARD);
 
   // Toast System
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -100,8 +253,10 @@ export const App: React.FC = () => {
     const titles: Record<NavigationItem, string> = {
       guild_hall: `GuildUp — ${activeGuild.name} (Guild Hall)`,
       quests: 'GuildUp — Active Quests & Curriculum Board',
+      leaderboard: 'GuildUp — Guild Leaderboard Standings',
       boss_arena: `GuildUp — Boss Raid: ${boss.name}`,
       study_rooms: `GuildUp — ${studyRoom.name} (Focus Sanctuary)`,
+      study_chat: 'GuildUp — Study Room Chat & Notes',
       achievements: 'GuildUp — Adventurer Achievements & Badges',
       friends: 'GuildUp — Party Roster & Friends',
       settings: 'GuildUp — Platform & Profile Settings',
@@ -121,6 +276,18 @@ export const App: React.FC = () => {
           `LEVEL UP! Level ${prev.level + 1} Reached!`,
           `Congratulations! You gained +${amount} XP from ${reason}.`
         );
+        setNotifications((n) => [
+          {
+            id: `notif-${Date.now()}`,
+            title: `LEVEL UP! Level ${prev.level + 1} Reached!`,
+            desc: `Congratulations! You gained +${amount} XP from ${reason}.`,
+            time: 'Just now',
+            unread: true,
+            type: 'achievement',
+            targetTab: 'achievements'
+          },
+          ...n
+        ]);
         return {
           ...prev,
           level: prev.level + 1,
@@ -218,6 +385,19 @@ export const App: React.FC = () => {
 
     awardUserXp(quest.rewardXp, `clearing ${quest.title}`);
 
+    setNotifications((n) => [
+      {
+        id: `notif-q-${Date.now()}`,
+        title: `Quest Completed: ${quest.title}`,
+        desc: `Earned +${quest.rewardXp} XP and upgraded party mastery.`,
+        time: 'Just now',
+        unread: true,
+        type: 'quest',
+        targetTab: 'quests'
+      },
+      ...n
+    ]);
+
     const newActivity: ActivityItem = {
       id: `act-${Date.now()}`,
       userName: user.name,
@@ -244,6 +424,19 @@ export const App: React.FC = () => {
       }
     }));
 
+    setNotifications((n) => [
+      {
+        id: `notif-b-${Date.now()}`,
+        title: 'Victory! The Query Devourer Pushed Back',
+        desc: 'Phase 2 shattered with +400 XP awarded to the guild roster.',
+        time: 'Just now',
+        unread: true,
+        type: 'boss',
+        targetTab: 'boss_arena'
+      },
+      ...n
+    ]);
+
     const newActivity: ActivityItem = {
       id: `act-${Date.now()}`,
       userName: user.name,
@@ -267,6 +460,19 @@ export const App: React.FC = () => {
             onSelectQuest={handleOpenQuest}
             onBackToGuildHall={() => setCurrentTab('guild_hall')}
             onQuestAction={handleOpenQuest}
+            globalSearchQuery={searchQuery}
+          />
+        );
+
+      case 'leaderboard':
+        return (
+          <LeaderboardView
+            entries={leaderboard}
+            searchQuery={searchQuery}
+            onSelectMember={(id) => {
+              const mem = members.find((m) => m.id === id);
+              if (mem) setSelectedMemberForPopout(mem);
+            }}
           />
         );
 
@@ -281,7 +487,49 @@ export const App: React.FC = () => {
         );
 
       case 'study_rooms':
-        return <StudyRoomsView studyRoom={studyRoom} user={user} />;
+        return (
+          <StudyRoomsView
+            rooms={studyRooms}
+            user={user}
+            activeRoomId={activeStudyRoomId}
+            onSelectRoom={(roomId) => {
+              setActiveStudyRoomId(roomId);
+              const r = studyRooms.find((room) => room.id === roomId);
+              if (r) {
+                setActiveVoiceRoom(r);
+                addToast('info', `Entered ${r.name}`, `Focus Topic: ${r.topic}`);
+              }
+            }}
+            onLeaveRoom={() => {
+              setActiveStudyRoomId(null);
+              try {
+                if (window.history.pushState) {
+                  window.history.pushState({}, '', window.location.pathname);
+                }
+              } catch {
+                // ignore
+              }
+            }}
+            onEndChamber={handleEndChamber}
+            onOpenStudyChat={() => setCurrentTab('study_chat')}
+            onRewardXp={(amt, reason) => awardUserXp(amt, reason)}
+            onCreateRoom={(newRoom) => {
+              setStudyRooms((prev) => [newRoom, ...prev]);
+              addToast('success', `Study Chamber "${newRoom.name}" Founded!`);
+            }}
+          />
+        );
+
+      case 'study_chat':
+        return (
+          <StudyChatView
+            studyRoom={studyRoom}
+            user={user}
+            members={members}
+            onOpenFocusChamber={() => setCurrentTab('study_rooms')}
+            onMemberClick={(member) => setSelectedMemberForPopout(member)}
+          />
+        );
 
       case 'achievements':
         return <AchievementsView />;
@@ -292,6 +540,9 @@ export const App: React.FC = () => {
             members={members}
             onInviteToStudy={(m) => {
               addToast('success', `Study Invite Dispatched to ${m.name}!`);
+            }}
+            onWhisper={(m) => {
+              setActiveWhisperMember(m);
             }}
           />
         );
@@ -304,6 +555,8 @@ export const App: React.FC = () => {
               setUser((prev) => ({ ...prev, ...updated }));
               addToast('success', 'Profile Preferences Updated');
             }}
+            isDarkMode={isDarkMode}
+            onToggleTheme={handleToggleTheme}
           />
         );
 
@@ -324,13 +577,53 @@ export const App: React.FC = () => {
             onViewAllQuests={() => setCurrentTab('quests')}
             onQuestAction={handleOpenQuest}
             onViewRoster={() => setCurrentTab('friends')}
+            onOpenStudySanctuary={() => setCurrentTab('study_rooms')}
           />
         );
     }
   };
 
+  // If user is inside a dedicated study room, render full-bleed immersive workspace
+  const isDedicatedRoomMode = currentTab === 'study_rooms' && activeStudyRoomId !== null;
+
+  if (isDedicatedRoomMode) {
+    return (
+      <div className="flex h-screen w-screen overflow-x-hidden overflow-y-hidden bg-[#070b13] text-slate-200 font-sans relative">
+        <StudyRoomsView
+          rooms={studyRooms}
+          user={user}
+          activeRoomId={activeStudyRoomId}
+          onSelectRoom={(roomId) => {
+            setActiveStudyRoomId(roomId);
+            const r = studyRooms.find((rm) => rm.id === roomId);
+            if (r) setActiveVoiceRoom(r);
+          }}
+          onLeaveRoom={() => {
+            setActiveStudyRoomId(null);
+            try {
+              if (window.history.pushState) {
+                window.history.pushState({}, '', window.location.pathname);
+              }
+            } catch {
+              // ignore
+            }
+          }}
+          onEndChamber={handleEndChamber}
+          onOpenStudyChat={() => setCurrentTab('study_chat')}
+          onRewardXp={(amt, reason) => awardUserXp(amt, reason)}
+          onCreateRoom={(newRoom) => {
+            setStudyRooms((prev) => [newRoom, ...prev]);
+            addToast('success', `Study Chamber "${newRoom.name}" Founded!`);
+          }}
+        />
+        {/* TOAST SYSTEM */}
+        <ToastContainer toasts={toasts} onDismiss={removeToast} />
+      </div>
+    );
+  }
+
   return (
-    <div className="flex h-screen w-screen overflow-x-hidden overflow-y-hidden bg-[#070b13] text-slate-100 font-sans relative">
+    <div className="flex h-screen w-screen overflow-x-hidden overflow-y-hidden bg-[#0a0d14] text-slate-200 font-sans relative">
       {/* 1. DESKTOP LEFT SIDEBAR (250px) */}
       <LeftSidebar
         currentTab={currentTab}
@@ -340,6 +633,7 @@ export const App: React.FC = () => {
         guilds={guilds}
         user={user}
         onCreateGuildClick={() => setIsCreateGuildOpen(true)}
+        onOpenProfile={() => setIsProfileModalOpen(true)}
       />
 
       {/* MOBILE NAVIGATION DRAWER */}
@@ -368,6 +662,10 @@ export const App: React.FC = () => {
                 setIsCreateGuildOpen(true);
                 setIsMobileNavOpen(false);
               }}
+              onOpenProfile={() => {
+                setIsProfileModalOpen(true);
+                setIsMobileNavOpen(false);
+              }}
               onCloseMobile={() => setIsMobileNavOpen(false)}
               isMobileDrawer
             />
@@ -383,13 +681,28 @@ export const App: React.FC = () => {
           searchQuery={searchQuery}
           onSearchChange={setSearchQuery}
           onOpenSettings={() => setCurrentTab('settings')}
+          onOpenProfile={() => setIsProfileModalOpen(true)}
           onToggleMobileMenu={() => setIsMobileNavOpen(true)}
           onToggleMobileMembers={() => setIsMobileMembersOpen(true)}
           onNavigateHome={() => setCurrentTab('guild_hall')}
+          onQuickNavigate={(t) => setCurrentTab(t)}
+          onOpenWhisperMember={(memberId) => {
+            const found = members.find((m) => m.id === memberId || m.name.toLowerCase().includes(memberId.toLowerCase()));
+            if (found) {
+              setActiveWhisperMember(found);
+            }
+          }}
+          isDarkMode={isDarkMode}
+          onToggleTheme={handleToggleTheme}
+          notifications={notifications}
+          onSelectNotification={handleSelectNotification}
+          onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
+          onClearAllNotifications={handleClearAllNotifications}
+          onDeleteNotification={handleDeleteNotification}
         />
 
         {/* Central Scrollable Workspace */}
-        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-[#070b13] relative flex flex-col justify-between">
+        <main className="flex-1 overflow-y-auto overflow-x-hidden bg-[#0a0d14] relative flex flex-col justify-between">
           <div className="flex-1">
             {renderCentralWorkspace()}
           </div>
@@ -407,8 +720,6 @@ export const App: React.FC = () => {
       {/* 3. DESKTOP RIGHT SIDEBAR (330px) */}
       <RightSidebar
         members={members}
-        studyRoom={studyRoom}
-        onJoinStudyRoom={() => setIsStudyRoomModalOpen(true)}
         onOpenMentorHint={() => setMentorModal({ isOpen: true, mode: 'hint' })}
         onOpenMentorChallenge={() => setMentorModal({ isOpen: true, mode: 'challenge' })}
         onMemberClick={(member) => setSelectedMemberForPopout(member)}
@@ -424,11 +735,6 @@ export const App: React.FC = () => {
           <div className="relative z-10 h-full">
             <RightSidebar
               members={members}
-              studyRoom={studyRoom}
-              onJoinStudyRoom={() => {
-                setIsStudyRoomModalOpen(true);
-                setIsMobileMembersOpen(false);
-              }}
               onOpenMentorHint={() => {
                 setMentorModal({ isOpen: true, mode: 'hint' });
                 setIsMobileMembersOpen(false);
@@ -475,8 +781,15 @@ export const App: React.FC = () => {
       <StudyRoomModal
         isOpen={isStudyRoomModalOpen}
         onClose={() => setIsStudyRoomModalOpen(false)}
-        studyRoom={studyRoom}
+        studyRoom={activeVoiceRoom || studyRoom}
         user={user}
+        onEnterChamber={(roomId) => {
+          setCurrentTab('study_rooms');
+          setActiveStudyRoomId(roomId);
+          const r = studyRooms.find((rm) => rm.id === roomId);
+          if (r) setActiveVoiceRoom(r);
+        }}
+        onLeaveRoom={handleLeaveVoiceRoom}
       />
 
       <CodexModal
@@ -490,10 +803,51 @@ export const App: React.FC = () => {
         member={selectedMemberForPopout}
         isOpen={!!selectedMemberForPopout}
         onClose={() => setSelectedMemberForPopout(null)}
-        onWhisper={(m) => addToast('info', `Whisper initiated with ${m.name}`, 'Secure party channel opened.')}
+        onWhisper={(m) => {
+          setActiveWhisperMember(m);
+          addToast('info', `Whisper initiated with ${m.name}`, 'Secure party direct channel opened.');
+        }}
         onInviteToStudy={(m) => addToast('success', `Study Sanctuary invite sent to ${m.name}`)}
         onChallengeDuel={(m) => addToast('achievement', `SQL Duel challenged to ${m.name}!`, 'Waiting for opponent response.')}
       />
+
+      {/* WHISPER DIRECT MESSAGE WINDOW */}
+      <WhisperModal
+        member={activeWhisperMember}
+        isOpen={!!activeWhisperMember}
+        onClose={() => setActiveWhisperMember(null)}
+        currentUser={user}
+        onInviteToStudy={(m) => {
+          addToast('success', `Study Sanctuary invite sent to ${m.name}`);
+        }}
+        onChallengeDuel={(m) => {
+          addToast('achievement', `SQL Duel challenged to ${m.name}!`, 'Waiting for opponent response.');
+        }}
+      />
+
+      {/* USER PROFILE MODAL */}
+      <UserProfileModal
+        user={user}
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        onUpdateUser={(updated) => {
+          setUser((prev) => ({ ...prev, ...updated }));
+          addToast('success', 'Profile Updated Successfully');
+        }}
+      />
+
+      {/* 4. FLOATING VOICE CHAT ROOM WINDOW (BOTTOM RIGHT CORNER) */}
+      {activeVoiceRoom && !isDedicatedRoomMode && (
+        <FloatingVoiceWidget
+          room={activeVoiceRoom}
+          onLeaveRoom={handleLeaveVoiceRoom}
+          onExpandChamber={() => {
+            setCurrentTab('study_rooms');
+            setActiveStudyRoomId(activeVoiceRoom.id);
+          }}
+          currentUserName={user.name}
+        />
+      )}
 
       {/* TOAST SYSTEM */}
       <ToastContainer toasts={toasts} onDismiss={removeToast} />

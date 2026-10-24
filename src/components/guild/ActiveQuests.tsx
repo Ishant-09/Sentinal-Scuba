@@ -16,38 +16,37 @@ export const ActiveQuests: React.FC<ActiveQuestsProps> = ({
   onViewAllQuests,
   onQuestAction
 }) => {
-  // Grab top 3 quests as specified
   const displayQuests = quests.slice(0, 3);
 
   const getDifficultyConfig = (difficulty: QuestDifficulty) => {
     switch (difficulty) {
       case 'COMMON':
         return {
-          badgeClass: 'bg-teal-950/70 text-teal-300 border-teal-800/60',
+          badgeClass: 'bg-teal-950/60 text-teal-300 border-teal-800/40',
           dotClass: 'bg-teal-400',
           barColor: 'bg-teal-400',
-          icon: <Database className="w-4 h-4 text-teal-400" />,
-          cardBorder: 'hover:border-teal-500/40',
-          buttonClass: 'bg-[#102428] hover:bg-[#16353b] text-teal-200 border-teal-700/50 hover:border-teal-400 shadow-[0_0_12px_rgba(20,184,166,0.15)]'
+          icon: <Database className="w-3.5 h-3.5 text-teal-400" />,
+          cardBorder: 'hover:border-teal-500/30',
+          buttonClass: 'bg-[#0f1f26] hover:bg-[#142d38] text-teal-200 border-teal-800/40 hover:border-teal-400'
         };
       case 'RARE':
         return {
-          badgeClass: 'bg-blue-950/70 text-blue-300 border-blue-800/60',
+          badgeClass: 'bg-blue-950/60 text-blue-300 border-blue-800/40',
           dotClass: 'bg-blue-400',
           barColor: 'bg-blue-400',
-          icon: <LinkIcon className="w-4 h-4 text-blue-400" />,
-          cardBorder: 'hover:border-blue-500/40',
-          buttonClass: 'bg-[#111c38] hover:bg-[#18274f] text-blue-200 border-blue-700/50 hover:border-blue-400 shadow-[0_0_12px_rgba(59,130,246,0.15)]'
+          icon: <LinkIcon className="w-3.5 h-3.5 text-blue-400" />,
+          cardBorder: 'hover:border-blue-500/30',
+          buttonClass: 'bg-[#101830] hover:bg-[#152347] text-blue-200 border-blue-800/40 hover:border-blue-400'
         };
       case 'EPIC':
       default:
         return {
-          badgeClass: 'bg-purple-950/70 text-purple-300 border-purple-800/60',
+          badgeClass: 'bg-purple-950/60 text-purple-300 border-purple-800/40',
           dotClass: 'bg-purple-400',
           barColor: 'bg-purple-400',
-          icon: <Scroll className="w-4 h-4 text-purple-400" />,
-          cardBorder: 'hover:border-purple-500/40',
-          buttonClass: 'bg-[#1c1333] hover:bg-[#281a49] text-purple-200 border-purple-700/50 hover:border-purple-400 shadow-[0_0_12px_rgba(168,85,247,0.15)]'
+          icon: <Scroll className="w-3.5 h-3.5 text-purple-400" />,
+          cardBorder: 'hover:border-purple-500/30',
+          buttonClass: 'bg-[#18112c] hover:bg-[#231742] text-purple-200 border-purple-800/40 hover:border-purple-400'
         };
     }
   };
@@ -66,12 +65,11 @@ export const ActiveQuests: React.FC<ActiveQuestsProps> = ({
       {/* Section Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded bg-cyan-950/80 border border-cyan-800 flex items-center justify-center text-cyan-400">
+          <div className="w-6 h-6 rounded bg-cyan-950/70 border border-cyan-800/50 flex items-center justify-center text-cyan-400">
             <Compass className="w-3.5 h-3.5" />
           </div>
           <div>
             <h3 className="text-sm font-bold text-white tracking-wide">Active Quests</h3>
-            <p className="text-[11px] text-slate-400">Collaborative learning milestones & trials</p>
           </div>
         </div>
 
@@ -93,7 +91,7 @@ export const ActiveQuests: React.FC<ActiveQuestsProps> = ({
           return (
             <div
               key={quest.id}
-              className={`rounded-card bg-[#0e162b] border border-[#1d2b4a] ${config.cardBorder} p-4 flex flex-col justify-between transition-all duration-200 shadow-panel relative group`}
+              className={`rounded-card bg-[#0b1222] border border-[#18233a] ${config.cardBorder} p-4 flex flex-col justify-between transition-all duration-200 shadow-panel relative group`}
             >
               <div>
                 {/* Top Badge & Icon */}
@@ -105,7 +103,7 @@ export const ActiveQuests: React.FC<ActiveQuestsProps> = ({
                     {quest.difficulty}
                   </span>
 
-                  <div className="w-7 h-7 rounded bg-[#131d36] border border-[#1e2f54] flex items-center justify-center">
+                  <div className="w-6 h-6 rounded bg-[#10182b] border border-[#19243d] flex items-center justify-center">
                     {config.icon}
                   </div>
                 </div>
@@ -118,13 +116,13 @@ export const ActiveQuests: React.FC<ActiveQuestsProps> = ({
                   {quest.title}
                 </h4>
 
-                <p className="text-[11px] text-slate-400 mt-1.5 line-clamp-2 leading-relaxed min-h-[34px]">
+                <p className="text-[11px] text-slate-400 mt-1 line-clamp-2 leading-relaxed min-h-[32px]">
                   {quest.description}
                 </p>
 
                 {/* Metadata: XP & Duration */}
-                <div className="mt-3 flex items-center justify-between text-[10px] font-mono text-slate-400">
-                  <span className="flex items-center gap-1 text-cyan-300">
+                <div className="mt-2.5 flex items-center justify-between text-[10px] font-mono text-slate-400">
+                  <span className="flex items-center gap-1 text-cyan-300 font-semibold">
                     <Sparkles className="w-3 h-3 text-cyan-400" />
                     +{quest.rewardXp} XP
                   </span>
@@ -135,10 +133,10 @@ export const ActiveQuests: React.FC<ActiveQuestsProps> = ({
                 </div>
 
                 {/* Thin Progress Bar */}
-                <div className="mt-2.5">
+                <div className="mt-2">
                   <div className="flex justify-between items-center text-[10px] font-mono text-slate-400 mb-1">
                     <span>Progress</span>
-                    <span className="font-semibold text-slate-200">
+                    <span className="text-slate-200">
                       {quest.progress}/{quest.maxProgress}
                     </span>
                   </div>
@@ -155,9 +153,9 @@ export const ActiveQuests: React.FC<ActiveQuestsProps> = ({
               <button
                 onClick={() => onQuestAction(quest)}
                 disabled={isFinished}
-                className={`w-full mt-4 py-2 px-3 rounded-inner text-xs font-semibold border transition-all active:scale-[0.98] ${
+                className={`w-full mt-3.5 py-1.5 px-3 rounded-inner text-xs font-semibold border transition-all active:scale-[0.98] ${
                   isFinished
-                    ? 'bg-[#0f1d24] text-teal-400 border-teal-800/40 cursor-default'
+                    ? 'bg-[#0b151c] text-teal-400 border-teal-900/40 cursor-default'
                     : config.buttonClass
                 }`}
               >

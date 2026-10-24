@@ -26,9 +26,9 @@ export const GuildActivityFeed: React.FC<GuildActivityFeedProps> = ({ activities
   };
 
   return (
-    <div className="rounded-card bg-[#0e162b] border border-[#1d2b4a] p-4 shadow-panel flex flex-col h-full">
+    <div className="rounded-card bg-[#0b1222] border border-[#18233a] p-4 shadow-panel flex flex-col h-full">
       {/* Title */}
-      <div className="flex items-center justify-between pb-3 border-b border-[#18233c] mb-3">
+      <div className="flex items-center justify-between pb-3 border-b border-[#141e33] mb-2.5">
         <div className="flex items-center gap-2">
           <Activity className="w-4 h-4 text-cyan-400" />
           <h3 className="text-xs font-bold text-slate-100 uppercase tracking-wider">
@@ -39,11 +39,11 @@ export const GuildActivityFeed: React.FC<GuildActivityFeedProps> = ({ activities
       </div>
 
       {/* Feed list */}
-      <div className="space-y-3 overflow-y-auto pr-1 flex-1">
+      <div className="space-y-1.5 overflow-y-auto pr-1 flex-1 divide-y divide-[#131b2e]">
         {activities.map((item) => (
           <div
             key={item.id}
-            className="flex items-start gap-3 p-2 rounded-inner hover:bg-[#121c33] transition-colors border border-transparent hover:border-[#1d2d4d]"
+            className="flex items-start gap-3 pt-2 pb-1.5 px-1.5 rounded-inner hover:bg-[#0f1729] transition-colors"
           >
             {/* User Avatar */}
             <Avatar seed={item.userAvatarSeed} size="sm" />
@@ -55,7 +55,7 @@ export const GuildActivityFeed: React.FC<GuildActivityFeedProps> = ({ activities
                 <span className="text-slate-400">{item.actionText}</span>{' '}
                 <span className="font-semibold text-cyan-300">{item.target}</span>
               </div>
-              <div className="flex items-center gap-1.5 mt-1 text-[10px] font-mono text-slate-500">
+              <div className="flex items-center gap-1.5 mt-0.5 text-[10px] font-mono text-slate-500">
                 {getActivityIcon(item.type)}
                 <span>{item.timestamp}</span>
               </div>

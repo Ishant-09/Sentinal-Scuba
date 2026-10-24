@@ -52,3 +52,260 @@
 .wave-bar-2 { animation: wave-bounce 0.8s ease-in-out infinite 0.2s; }
 .wave-bar-3 { animation: wave-bounce 1.3s ease-in-out infinite 0.4s; }
 .wave-bar-4 { animation: wave-bounce 0.9s ease-in-out infinite 0.1s; }
+
+/* =========================================================================
+   LIGHT MODE TRANQUIL STUDY STYLING OVERRIDES (CALM, LEGIBLE, EYE-FRIENDLY)
+   ========================================================================= */
+html.light {
+  color-scheme: light;
+}
+
+html.light body {
+  background-color: #f1f5f9;
+  color: #1e293b;
+}
+
+/* Base dark container backgrounds mapped to soft calm paper-slate */
+html.light .bg-\[\#070b13\],
+html.light .bg-\[\#0a0d14\],
+html.light .bg-\[\#080b12\],
+html.light .bg-\[\#0a101d\],
+html.light .bg-\[\#060911\] {
+  background-color: #f1f5f9 !important;
+}
+
+/* Card and panel surfaces */
+html.light .bg-\[\#0c1018\],
+html.light .bg-\[\#0d121d\],
+html.light .bg-\[\#0d121e\],
+html.light .bg-\[\#0e131d\],
+html.light .bg-\[\#0e1420\],
+html.light .bg-\[\#0e162b\],
+html.light .bg-\[\#0f141f\],
+html.light .bg-\[\#0f1420\],
+html.light .bg-\[\#0f1522\],
+html.light .bg-\[\#0f1626\],
+html.light .bg-\[\#0c111c\],
+html.light .bg-\[\#101522\],
+html.light .bg-\[\#101524\],
+html.light .bg-\[\#111724\],
+html.light .bg-\[\#111726\] {
+  background-color: #ffffff !important;
+}
+
+/* Elevated chips and secondary containers */
+html.light .bg-\[\#121824\],
+html.light .bg-\[\#121929\],
+html.light .bg-\[\#121c2e\],
+html.light .bg-\[\#131926\],
+html.light .bg-\[\#131b2c\],
+html.light .bg-\[\#141b28\],
+html.light .bg-\[\#141c2a\],
+html.light .bg-\[\#141d2c\],
+html.light .bg-\[\#141d2d\],
+html.light .bg-\[\#151c2a\],
+html.light .bg-\[\#171f2e\],
+html.light .bg-\[\#171f30\],
+html.light .bg-\[\#182030\] {
+  background-color: #f8fafc !important;
+}
+
+/* Active buttons and elevated hover surfaces */
+html.light .bg-\[\#1a2333\],
+html.light .bg-\[\#1b2438\],
+html.light .bg-\[\#1d273a\],
+html.light .bg-\[\#1d2b4a\],
+html.light .bg-\[\#1f2a40\],
+html.light .bg-\[\#232d42\],
+html.light .bg-\[\#222d42\] {
+  background-color: #e2e8f0 !important;
+}
+
+/* Defined borders to separate cards with gentle contrast */
+html.light .border-\[\#161d2b\],
+html.light .border-\[\#171f2e\],
+html.light .border-\[\#182030\],
+html.light .border-\[\#1a2233\],
+html.light .border-\[\#1a2333\],
+html.light .border-\[\#1a2335\],
+html.light .border-\[\#1b2538\],
+html.light .border-\[\#1b2844\],
+html.light .border-\[\#1c2944\],
+html.light .border-\[\#1d273a\],
+html.light .border-\[\#1d2b4a\],
+html.light .border-\[\#1e293b\],
+html.light .border-\[\#1e2c44\],
+html.light .border-\[\#1e2f54\],
+html.light .border-\[\#1f2d42\],
+html.light .border-\[\#1f2d44\],
+html.light .border-\[\#222d42\] {
+  border-color: #cbd5e1 !important;
+}
+
+/* Readable typography hierarchy */
+html.light h1.text-white,
+html.light h2.text-white,
+html.light h3.text-white,
+html.light h4.text-white,
+html.light span.text-white:not(.badge-white),
+html.light p.text-white {
+  color: #0f172a !important;
+}
+
+html.light .text-slate-100,
+html.light .text-slate-200 {
+  color: #1e293b !important;
+}
+
+html.light .text-slate-300 {
+  color: #334155 !important;
+}
+
+html.light .text-slate-400 {
+  color: #475569 !important;
+}
+
+html.light .text-slate-500 {
+  color: #64748b !important;
+}
+
+/* PROTECT solid colored action buttons so text is NEVER dark-on-dark */
+html.light .bg-rose-600,
+html.light .bg-rose-500,
+html.light button.bg-rose-600,
+html.light button.bg-rose-500 {
+  background-color: #e11d48 !important;
+  color: #ffffff !important;
+}
+
+html.light .bg-rose-600 *,
+html.light .bg-rose-500 *,
+html.light button.bg-rose-600 *,
+html.light button.bg-rose-500 * {
+  color: #ffffff !important;
+}
+
+html.light .bg-teal-500,
+html.light button.bg-teal-500 {
+  background-color: #0d9488 !important;
+  color: #ffffff !important;
+}
+
+html.light .bg-teal-500 *,
+html.light button.bg-teal-500 * {
+  color: #ffffff !important;
+}
+
+html.light .bg-teal-600,
+html.light button.bg-teal-600 {
+  background-color: #0f766e !important;
+  color: #ffffff !important;
+}
+
+html.light .bg-teal-600 *,
+html.light button.bg-teal-600 * {
+  color: #ffffff !important;
+}
+
+/* Interactive hover backgrounds */
+html.light .hover\:bg-\[\#121824\]:hover,
+html.light .hover\:bg-\[\#141b28\]:hover,
+html.light .hover\:bg-\[\#182030\]:hover,
+html.light .hover\:bg-\[\#192335\]:hover,
+html.light .hover\:bg-\[\#1b2438\]:hover,
+html.light .hover\:bg-\[\#141d2c\]:hover {
+  background-color: #f1f5f9 !important;
+}
+
+html.light .hover\:text-white:hover {
+  color: #0f172a !important;
+}
+
+/* Form input elements */
+html.light input:not([type="checkbox"]),
+html.light textarea,
+html.light select {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html.light input:not([type="checkbox"])::placeholder,
+html.light textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+/* Soothing pastel pills for light mode */
+html.light .bg-teal-950,
+html.light .bg-teal-950\/15,
+html.light .bg-teal-950\/20,
+html.light .bg-teal-950\/30,
+html.light .bg-teal-950\/40,
+html.light .bg-teal-950\/50,
+html.light .bg-teal-950\/60,
+html.light .bg-teal-950\/70 {
+  background-color: #f0fdfa !important;
+}
+
+html.light .text-teal-400,
+html.light .text-teal-300 {
+  color: #0f766e !important;
+}
+
+html.light .border-teal-500\/30,
+html.light .border-teal-500\/40,
+html.light .border-teal-800 {
+  border-color: #99f6e4 !important;
+}
+
+html.light .bg-amber-950,
+html.light .bg-amber-950\/40,
+html.light .bg-amber-950\/60,
+html.light .bg-amber-950\/80 {
+  background-color: #fffbeb !important;
+}
+
+html.light .text-amber-300,
+html.light .text-amber-400 {
+  color: #b45309 !important;
+}
+
+html.light .border-amber-800,
+html.light .border-amber-600\/60 {
+  border-color: #fde68a !important;
+}
+
+html.light .bg-rose-950,
+html.light .bg-rose-950\/30,
+html.light .bg-rose-950\/40,
+html.light .bg-rose-950\/60,
+html.light .bg-rose-950\/70,
+html.light .bg-rose-950\/80 {
+  background-color: #fff1f2 !important;
+}
+
+html.light .text-rose-300,
+html.light .text-rose-400 {
+  color: #be123c !important;
+}
+
+html.light .border-rose-800,
+html.light .border-rose-600\/70 {
+  border-color: #fecdd3 !important;
+}
+
+/* Soft shadows for light mode panels */
+html.light .shadow-panel,
+html.light .shadow-xl,
+html.light .shadow-2xl {
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.08), 0 1px 2px -1px rgba(15, 23, 42, 0.08) !important;
+}
+
+/* Light mode scrollbar */
+html.light ::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+}
+
+html.light ::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}

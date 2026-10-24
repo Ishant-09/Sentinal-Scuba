@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sparkles, Check, Flame } from 'lucide-react';
+import { Sparkles, Check } from 'lucide-react';
 import { WeeklyProgressData } from '../../types';
 
 interface WeeklyProgressBarProps {
@@ -29,45 +29,45 @@ export const WeeklyProgressBar: React.FC<WeeklyProgressBarProps> = ({
   const percentage = Math.min(Math.round((data.currentWeekXp / data.weeklyGoalXp) * 100), 100);
 
   return (
-    <div className={`p-3.5 rounded-card bg-[#0e172a] border border-[#1e2f52] shadow-sm ${className}`}>
+    <div className={`p-4 rounded-card bg-[#0e131d] border border-[#1a2333] shadow-sm ${className}`}>
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-          <span className="text-xs font-semibold text-slate-100">Weekly XP Goal</span>
+          <Sparkles className="w-3.5 h-3.5 text-teal-400" />
+          <span className="text-xs font-semibold text-slate-200">Weekly Study Target</span>
         </div>
         <div className="flex items-center gap-1.5 text-[11px] font-mono">
-          <span className="text-cyan-300 font-bold">{data.currentWeekXp}</span>
-          <span className="text-slate-500">/</span>
+          <span className="text-teal-300 font-bold">{data.currentWeekXp}</span>
+          <span className="text-slate-600">/</span>
           <span className="text-slate-400">{data.weeklyGoalXp} XP</span>
-          <span className="text-[10px] px-1.5 py-0.2 rounded bg-cyan-950 text-cyan-300 border border-cyan-800 font-semibold ml-1">
+          <span className="text-[10px] px-1.5 py-0.2 rounded bg-teal-950/80 text-teal-300 border border-teal-800/60 font-semibold ml-1">
             {percentage}%
           </span>
         </div>
       </div>
 
       {/* Main Bar */}
-      <div className="w-full h-2 bg-slate-900 rounded-full overflow-hidden border border-slate-700/50 relative">
+      <div className="w-full h-1.5 bg-[#090d14] rounded-full overflow-hidden border border-[#1a2233]">
         <div
-          className="h-full bg-gradient-to-r from-cyan-500 via-teal-400 to-blue-500 rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(6,182,212,0.4)]"
+          className="h-full bg-gradient-to-r from-teal-500 to-sky-500 rounded-full transition-all duration-500"
           style={{ width: `${percentage}%` }}
         />
       </div>
 
       {/* Days Row */}
-      <div className="grid grid-cols-7 gap-1.5 mt-3 pt-2.5 border-t border-[#18233c] text-center">
+      <div className="grid grid-cols-7 gap-1.5 mt-3 pt-2.5 border-t border-[#161d2a] text-center">
         {data.days.map((d) => (
           <div
             key={d.day}
             className={`p-1 rounded-inner flex flex-col items-center transition-all ${
               d.isToday
-                ? 'bg-cyan-950/60 border border-cyan-500/50'
-                : 'bg-[#10192e] border border-transparent'
+                ? 'bg-teal-950/40 border border-teal-600/40'
+                : 'bg-[#121824] border border-transparent'
             }`}
           >
             <span
               className={`text-[9px] font-mono block ${
-                d.isToday ? 'text-cyan-300 font-bold' : d.completed ? 'text-slate-300' : 'text-slate-500'
+                d.isToday ? 'text-teal-300 font-bold' : d.completed ? 'text-slate-300' : 'text-slate-500'
               }`}
             >
               {d.day}
@@ -75,15 +75,15 @@ export const WeeklyProgressBar: React.FC<WeeklyProgressBarProps> = ({
 
             <div className="mt-1 flex items-center justify-center">
               {d.completed ? (
-                <div className="w-3.5 h-3.5 rounded-full bg-teal-500/20 border border-teal-500/60 flex items-center justify-center text-teal-300">
+                <div className="w-3.5 h-3.5 rounded-full bg-teal-500/20 border border-teal-500/50 flex items-center justify-center text-teal-300">
                   <Check className="w-2.5 h-2.5 stroke-[2.5]" />
                 </div>
               ) : d.isToday ? (
-                <div className="w-3.5 h-3.5 rounded-full bg-cyan-400/20 border border-cyan-400 flex items-center justify-center text-cyan-300 animate-pulse">
-                  <span className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                <div className="w-3.5 h-3.5 rounded-full bg-teal-400/20 border border-teal-400 flex items-center justify-center text-teal-300">
+                  <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
                 </div>
               ) : (
-                <div className="w-3.5 h-3.5 rounded-full bg-slate-800 border border-slate-700" />
+                <div className="w-3.5 h-3.5 rounded-full bg-[#18202e] border border-[#202b3d]" />
               )}
             </div>
           </div>

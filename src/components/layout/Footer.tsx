@@ -16,34 +16,32 @@ export const Footer: React.FC<FooterProps> = ({
   onReportBug
 }) => {
   return (
-    <footer className="mt-12 pt-6 pb-8 border-t border-[#162136] text-slate-500 text-xs">
+    <footer className="mt-12 pt-6 pb-8 border-t border-[#161d2b] text-slate-500 text-xs">
       <div className="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
         {/* Left Brand Identity */}
         <div className="flex items-center gap-2.5">
-          <div className="w-5 h-5 rounded bg-cyan-950 border border-cyan-800/80 flex items-center justify-center text-cyan-400">
-            <svg viewBox="0 0 24 24" className="w-3 h-3 fill-cyan-400">
-              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-            </svg>
+          <div className="w-6 h-6 rounded bg-[#141d2c]/80 border border-teal-500/30 flex items-center justify-center p-0.5">
+            <img src="/logo.png" alt="GuildUp Logo" className="w-full h-full object-contain" />
           </div>
           <span className="font-bold text-slate-300">GuildUp</span>
-          <span className="text-[10px] text-slate-500 font-mono">v1.0.4-beta</span>
+          <span className="text-[10px] text-slate-500 font-mono">v1.0.4</span>
         </div>
 
         {/* Center Minimalist Links */}
         <div className="flex items-center gap-5 flex-wrap justify-center text-[11px] font-mono">
           <button
             onClick={onOpenCodex}
-            className="hover:text-cyan-300 transition-colors flex items-center gap-1"
+            className="hover:text-teal-300 transition-colors flex items-center gap-1"
           >
-            <FileText className="w-3 h-3 text-cyan-400" />
+            <FileText className="w-3 h-3 text-teal-400" />
             <span>Guild Codex</span>
           </button>
 
           <button
             onClick={onOpenPatchNotes}
-            className="hover:text-cyan-300 transition-colors flex items-center gap-1"
+            className="hover:text-teal-300 transition-colors flex items-center gap-1"
           >
-            <Terminal className="w-3 h-3 text-cyan-400" />
+            <Terminal className="w-3 h-3 text-teal-400" />
             <span>Patch Notes</span>
           </button>
 

@@ -1,14 +1,21 @@
 import React, { useState } from 'react';
-import { Settings, Volume2, Bell, Shield, Palette, Sparkles, Save, Check } from 'lucide-react';
+import { Settings, Volume2, Bell, Shield, Palette, Sparkles, Save, Check, Sun, Moon } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { Avatar } from '../common/Avatar';
 
 interface SettingsViewProps {
   user: UserProfile;
   onUpdateUser: (updated: Partial<UserProfile>) => void;
+  isDarkMode?: boolean;
+  onToggleTheme?: () => void;
 }
 
-export const SettingsView: React.FC<SettingsViewProps> = ({ user, onUpdateUser }) => {
+export const SettingsView: React.FC<SettingsViewProps> = ({
+  user,
+  onUpdateUser,
+  isDarkMode = true,
+  onToggleTheme
+}) => {
   const [name, setName] = useState(user.name);
   const [roleClass, setRoleClass] = useState(user.roleClass);
   const [soundEffects, setSoundEffects] = useState(true);
@@ -72,6 +79,42 @@ export const SettingsView: React.FC<SettingsViewProps> = ({ user, onUpdateUser }
                 <option value="Starbound Coder">Starbound Coder</option>
               </select>
             </div>
+          </div>
+        </div>
+
+        {/* Visual Appearance & Theme */}
+        <div className="rounded-card bg-[#0e162b] border border-[#1d2b4a] p-5 shadow-panel space-y-4">
+          <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider flex items-center gap-2">
+            <Palette className="w-4 h-4 text-cyan-400" />
+            Appearance & Workspace Theme
+          </h3>
+
+          <div className="flex items-center justify-between py-2">
+            <div>
+              <span className="text-xs font-semibold text-slate-200">Light / Dark Study Theme</span>
+              <p className="text-[11px] text-slate-400">
+                Current theme: <span className="font-mono text-cyan-400 font-semibold">{isDarkMode ? 'Dark Midnight Study' : 'Light Clean Study'}</span>
+              </p>
+            </div>
+            {onToggleTheme && (
+              <button
+                type="button"
+                onClick={onToggleTheme}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-inner border border-[#1b2844] hover:border-cyan-500/50 bg-[#0a101d] hover:bg-[#121824] text-xs font-medium transition-colors"
+              >
+                {isDarkMode ? (
+                  <>
+                    <Moon className="w-4 h-4 text-teal-400" />
+                    <span className="text-slate-200">Dark Mode Active (Switch to Light)</span>
+                  </>
+                ) : (
+                  <>
+                    <Sun className="w-4 h-4 text-amber-500" />
+                    <span className="text-slate-700 font-medium">Light Mode Active (Switch to Dark)</span>
+                  </>
+                )}
+              </button>
+            )}
           </div>
         </div>
 

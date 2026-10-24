@@ -8,18 +8,26 @@ interface StudyRoomModalProps {
   onClose: () => void;
   studyRoom: StudyRoom;
   user: UserProfile;
+  onEnterChamber?: (roomId: string) => void;
+  onLeaveRoom?: () => void;
 }
 
 export const StudyRoomModal: React.FC<StudyRoomModalProps> = ({
   isOpen,
   onClose,
   studyRoom,
-  user
+  user,
+  onEnterChamber,
+  onLeaveRoom
 }) => {
   const [isMuted, setIsMuted] = useState(false);
   const [isDeafened, setIsDeafened] = useState(false);
 
   if (!isOpen) return null;
+
+  const handleOpenNewTab = () => {
+    window.open(`${window.location.origin}${window.location.pathname}?room=${studyRoom.id}`, '_blank');
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
@@ -87,6 +95,28 @@ export const StudyRoomModal: React.FC<StudyRoomModalProps> = ({
             </div>
           </div>
 
+          {/* Chamber Action Row */}
+          <div className="pt-2 grid grid-cols-2 gap-2">
+            <button
+              onClick={() => {
+                onClose();
+                onEnterChamber?.(studyRoom.id);
+              }}
+              className="py-2.5 px-3 rounded-inner bg-teal-500 hover:bg-teal-400 text-[#070b13] font-bold text-xs flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95"
+            >
+              <Headphones className="w-3.5 h-3.5" />
+              <span>Enter Chamber</span>
+            </button>
+
+            <button
+              onClick={handleOpenNewTab}
+              className="py-2.5 px-3 rounded-inner bg-[#152340] hover:bg-[#1a2d54] border border-teal-500/40 text-teal-300 font-semibold text-xs flex items-center justify-center gap-1.5 transition-all"
+            >
+              <span>Open in New Tab</span>
+              <span>↗</span>
+            </button>
+          </div>
+
           {/* Voice Controls */}
           <div className="pt-2 flex items-center justify-center gap-3">
             <button
@@ -114,7 +144,10 @@ export const StudyRoomModal: React.FC<StudyRoomModalProps> = ({
             </button>
 
             <button
-              onClick={onClose}
+              onClick={() => {
+                onLeaveRoom?.();
+                onClose();
+              }}
               className="px-4 py-2 rounded-inner bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs flex items-center gap-1.5 transition-all shadow-[0_0_12px_rgba(244,63,94,0.3)]"
             >
               <PhoneOff className="w-3.5 h-3.5" />

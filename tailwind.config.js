@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -7,24 +8,23 @@ export default {
   theme: {
     extend: {
       colors: {
-        background: '#070b13',
+        background: '#0a0d14',
         surface: {
-          DEFAULT: '#0d1527',
-          card: '#111c33',
-          elevated: '#172442',
-          hover: '#1b2b4e',
-          active: '#1e325c',
+          DEFAULT: '#0f141f',
+          card: '#131926',
+          elevated: '#171f30',
+          hover: '#1b2438',
+          active: '#1f2a40',
         },
         border: {
-          subtle: '#1e293b',
-          muted: '#253554',
+          subtle: '#1a2233',
+          muted: '#222d42',
           highlight: '#38bdf8',
         },
         brand: {
-          cyan: '#06b6d4',
-          teal: '#14b8a6',
+          cyan: '#14b8a6', // soothing study teal
+          teal: '#0d9488',
           blue: '#3b82f6',
-          electric: '#2563eb',
           purple: '#8b5cf6',
           amber: '#f59e0b',
           rose: '#f43f5e',
@@ -35,14 +35,12 @@ export default {
         mono: ['JetBrains Mono', 'Fira Code', 'monospace'],
       },
       borderRadius: {
-        'card': '12px',
-        'inner': '8px',
+        'card': '10px',
+        'inner': '6px',
       },
       boxShadow: {
-        'glow-cyan': '0 0 20px -5px rgba(6, 182, 212, 0.25)',
-        'glow-blue': '0 0 20px -5px rgba(59, 130, 246, 0.25)',
-        'glow-purple': '0 0 20px -5px rgba(139, 92, 246, 0.25)',
-        'panel': '0 4px 20px -2px rgba(0, 0, 0, 0.5)',
+        'panel': '0 1px 3px 0 rgba(0, 0, 0, 0.3), 0 1px 2px -1px rgba(0, 0, 0, 0.3)',
+        'subtle': '0 2px 8px -2px rgba(0, 0, 0, 0.4)',
       }
     },
   },

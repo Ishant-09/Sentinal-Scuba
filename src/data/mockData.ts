@@ -13,12 +13,12 @@ import {
 export const INITIAL_USER: UserProfile = {
   name: 'Ishant Phadatare',
   roleClass: 'Rune Architect',
-  level: 12,
-  currentXp: 420,
-  maxXp: 800,
-  dailyStreak: 5,
-  questsCompletedThisWeek: 8,
-  masteryScore: 68,
+  level: 1,
+  currentXp: 0,
+  maxXp: 500,
+  dailyStreak: 0,
+  questsCompletedThisWeek: 0,
+  masteryScore: 0,
   avatarSeed: 'ishant',
   avatarColor: '#06b6d4'
 };
@@ -28,12 +28,12 @@ export const INITIAL_GUILDS: Guild[] = [
     id: 'shadow-protocol',
     name: 'Shadow Protocol',
     tag: 'SP',
-    level: 4,
-    currentXp: 2480,
-    maxXp: 6000,
-    memberCount: 8,
+    level: 1,
+    currentXp: 0,
+    maxXp: 3000,
+    memberCount: 4,
     maxMembers: 12,
-    onlineCount: 5,
+    onlineCount: 4,
     description: 'Six weeks to master SQL. Four adventurers. One legendary challenge.',
     emblemColor: '#06b6d4',
     emblemIcon: 'shield'
@@ -42,12 +42,12 @@ export const INITIAL_GUILDS: Guild[] = [
     id: 'midnight-scholars',
     name: 'The Midnight Scholars',
     tag: 'TMS',
-    level: 3,
-    currentXp: 1840,
-    maxXp: 4500,
-    memberCount: 5,
+    level: 1,
+    currentXp: 0,
+    maxXp: 3000,
+    memberCount: 4,
     maxMembers: 8,
-    onlineCount: 3,
+    onlineCount: 2,
     description: 'Late night algorithms, distributed systems, and competitive problem solving.',
     emblemColor: '#8b5cf6',
     emblemIcon: 'book-open'
@@ -56,12 +56,12 @@ export const INITIAL_GUILDS: Guild[] = [
     id: 'code-shinobi',
     name: 'Code Shinobi',
     tag: 'CS',
-    level: 5,
-    currentXp: 4120,
-    maxXp: 7500,
-    memberCount: 6,
+    level: 1,
+    currentXp: 0,
+    maxXp: 3000,
+    memberCount: 4,
     maxMembers: 10,
-    onlineCount: 4,
+    onlineCount: 2,
     description: 'Fast, stealthy execution. Full-stack TypeScript and low-level Rust mastery.',
     emblemColor: '#10b981',
     emblemIcon: 'zap'
@@ -70,12 +70,12 @@ export const INITIAL_GUILDS: Guild[] = [
     id: 'arcane-academy',
     name: 'Arcane Academy',
     tag: 'AA',
-    level: 2,
-    currentXp: 950,
+    level: 1,
+    currentXp: 0,
     maxXp: 3000,
     memberCount: 4,
     maxMembers: 8,
-    onlineCount: 2,
+    onlineCount: 1,
     description: 'Foundational computer science principles, discrete math, and graph theory.',
     emblemColor: '#3b82f6',
     emblemIcon: 'compass'
@@ -86,29 +86,29 @@ export const INITIAL_BOSS: BossEncounter = {
   name: 'THE QUERY DEVOURER',
   subtitle: 'An ancient corrupted index entity consuming database clusters across the realm.',
   difficulty: 'LEGENDARY',
-  overallProgress: 68,
+  overallProgress: 0,
   element: 'Void / Latency',
   lore: 'Spawned from an unindexed trillion-row JOIN disaster in the subterranean server vaults. Only perfectly optimized relational spells can shatter its core.',
   currentPhase: {
-    number: 2,
-    name: 'Phase 2 — The Join Labyrinth',
+    number: 1,
+    name: 'Phase 1 — Unindexed Depths',
     status: 'active',
-    bossHp: 6400,
-    bossMaxHp: 20000
+    bossHp: 10000,
+    bossMaxHp: 10000
   },
   phases: [
     {
       number: 1,
       name: 'Phase 1 — Unindexed Depths',
-      status: 'completed',
-      bossHp: 0,
+      status: 'active',
+      bossHp: 10000,
       bossMaxHp: 10000
     },
     {
       number: 2,
       name: 'Phase 2 — The Join Labyrinth',
-      status: 'active',
-      bossHp: 6400,
+      status: 'locked',
+      bossHp: 20000,
       bossMaxHp: 20000
     },
     {
@@ -129,15 +129,15 @@ export const INITIAL_QUESTS: Quest[] = [
     description: 'Master variables, data structures, list comprehensions, and idiomatic Python control flow.',
     rewardXp: 120,
     duration: '25 min',
-    progress: 3,
+    progress: 0,
     maxProgress: 4,
     completed: false,
     category: 'Learning Python',
     objective: 'Write automated data parsing scripts using dictionaries, sets, and list comprehensions.',
     steps: [
-      { id: 1, text: 'Configure virtual environment and poetry dependencies', completed: true },
-      { id: 2, text: 'Transform raw datasets using list & dict comprehensions', completed: true },
-      { id: 3, text: 'Implement robust error handling with custom exceptions', completed: true },
+      { id: 1, text: 'Configure virtual environment and poetry dependencies', completed: false },
+      { id: 2, text: 'Transform raw datasets using list & dict comprehensions', completed: false },
+      { id: 3, text: 'Implement robust error handling with custom exceptions', completed: false },
       { id: 4, text: 'Build generator functions to stream large memory blocks', completed: false }
     ]
   },
@@ -148,13 +148,13 @@ export const INITIAL_QUESTS: Quest[] = [
     description: 'Design modular classes, dunder methods, polymorphism, and dependency injection patterns.',
     rewardXp: 220,
     duration: '35 min',
-    progress: 1,
+    progress: 0,
     maxProgress: 4,
     completed: false,
     category: 'Learning Python',
     objective: 'Implement an extensible domain model with encapsulation and custom iterators.',
     steps: [
-      { id: 1, text: 'Define class schemas with @dataclass and type hints', completed: true },
+      { id: 1, text: 'Define class schemas with @dataclass and type hints', completed: false },
       { id: 2, text: 'Override __repr__, __eq__, and __hash__ dunder methods', completed: false },
       { id: 3, text: 'Construct abstract base classes using the abc module', completed: false },
       { id: 4, text: 'Verify composition over inheritance with unit tests', completed: false }
@@ -186,14 +186,14 @@ export const INITIAL_QUESTS: Quest[] = [
     description: 'Implement SOLID principles, Factory, and Observer patterns to refactor monolithic legacy code.',
     rewardXp: 250,
     duration: '40 min',
-    progress: 2,
+    progress: 0,
     maxProgress: 5,
     completed: false,
     category: 'Computer Programming',
     objective: 'Decouple tightly coupled modules into testable, inverted dependency interfaces.',
     steps: [
-      { id: 1, text: 'Identify Single Responsibility violations in service classes', completed: true },
-      { id: 2, text: 'Implement Factory Pattern for multi-platform connectors', completed: true },
+      { id: 1, text: 'Identify Single Responsibility violations in service classes', completed: false },
+      { id: 2, text: 'Implement Factory Pattern for multi-platform connectors', completed: false },
       { id: 3, text: 'Establish event-driven Observer listeners for state changes', completed: false },
       { id: 4, text: 'Eliminate code smells through automated linter rules', completed: false },
       { id: 5, text: 'Achieve 90%+ code coverage on critical core paths', completed: false }
@@ -206,14 +206,14 @@ export const INITIAL_QUESTS: Quest[] = [
     description: 'Master rebase, cherry-pick, and three-way conflict resolutions without losing code history.',
     rewardXp: 140,
     duration: '20 min',
-    progress: 2,
+    progress: 0,
     maxProgress: 3,
     completed: false,
     category: 'Git & GitHub',
     objective: 'Navigate complex branch divergence, squash commits, and resolve conflicting index hunks.',
     steps: [
-      { id: 1, text: 'Execute interactive rebase with git rebase -i HEAD~4', completed: true },
-      { id: 2, text: 'Resolve semantic merge conflicts using diff3 conflict style', completed: true },
+      { id: 1, text: 'Execute interactive rebase with git rebase -i HEAD~4', completed: false },
+      { id: 2, text: 'Resolve semantic merge conflicts using diff3 conflict style', completed: false },
       { id: 3, text: 'Cherry-pick critical bug fixes onto staging release branches', completed: false }
     ]
   },
@@ -243,13 +243,13 @@ export const INITIAL_QUESTS: Quest[] = [
     description: 'Prove theorems using mathematical induction, graph theory invariants, and set relations.',
     rewardXp: 280,
     duration: '45 min',
-    progress: 1,
+    progress: 0,
     maxProgress: 3,
     completed: false,
     category: 'Mathematics',
     objective: 'Establish rigorous formal proofs for algorithmic correctness and graph bipartiteness.',
     steps: [
-      { id: 1, text: 'Prove summation identities via weak and strong induction', completed: true },
+      { id: 1, text: 'Prove summation identities via weak and strong induction', completed: false },
       { id: 2, text: 'Compute Euler paths and Hamiltonian cycle conditions on graphs', completed: false },
       { id: 3, text: 'Formulate equivalence relations and partial order sets (posets)', completed: false }
     ]
@@ -325,29 +325,29 @@ export const QUEST_BANNERS = [
 export const INITIAL_LEADERBOARD = [
   {
     rank: 1,
-    userId: 'm2',
-    name: 'Aviral Maurya',
-    roleClass: 'Shadow Scholar',
-    avatarSeed: 'aviral',
-    level: 14,
-    weeklyXp: 2840,
-    studyHours: 24.5,
-    questsCompleted: 12,
-    streakDays: 14,
-    isCurrentUser: false
-  },
-  {
-    rank: 2,
     userId: 'm1',
     name: 'Ishant Phadatare',
     roleClass: 'Rune Architect',
     avatarSeed: 'ishant',
-    level: 12,
-    weeklyXp: 2420,
-    studyHours: 19.8,
-    questsCompleted: 8,
-    streakDays: 5,
+    level: 1,
+    weeklyXp: 0,
+    studyHours: 0,
+    questsCompleted: 0,
+    streakDays: 0,
     isCurrentUser: true
+  },
+  {
+    rank: 2,
+    userId: 'm2',
+    name: 'Aviral Maurya',
+    roleClass: 'Shadow Scholar',
+    avatarSeed: 'aviral',
+    level: 1,
+    weeklyXp: 0,
+    studyHours: 0,
+    questsCompleted: 0,
+    streakDays: 0,
+    isCurrentUser: false
   },
   {
     rank: 3,
@@ -355,11 +355,11 @@ export const INITIAL_LEADERBOARD = [
     name: 'Eknaath Bawane',
     roleClass: 'Blade of Logic',
     avatarSeed: 'eknaath',
-    level: 13,
-    weeklyXp: 2190,
-    studyHours: 18.2,
-    questsCompleted: 9,
-    streakDays: 9,
+    level: 1,
+    weeklyXp: 0,
+    studyHours: 0,
+    questsCompleted: 0,
+    streakDays: 0,
     isCurrentUser: false
   },
   {
@@ -368,37 +368,11 @@ export const INITIAL_LEADERBOARD = [
     name: 'Ajay Gurjar',
     roleClass: 'Arcane Healer',
     avatarSeed: 'ajay',
-    level: 13,
-    weeklyXp: 1940,
-    studyHours: 16.0,
-    questsCompleted: 7,
-    streakDays: 7,
-    isCurrentUser: false
-  },
-  {
-    rank: 5,
-    userId: 'm5',
-    name: 'Kai',
-    roleClass: 'Starbound Coder',
-    avatarSeed: 'kai',
-    level: 12,
-    weeklyXp: 1720,
-    studyHours: 14.5,
-    questsCompleted: 6,
-    streakDays: 6,
-    isCurrentUser: false
-  },
-  {
-    rank: 6,
-    userId: 'm6',
-    name: 'Sora',
-    roleClass: 'Windcaller',
-    avatarSeed: 'sora',
-    level: 11,
-    weeklyXp: 1480,
-    studyHours: 12.0,
-    questsCompleted: 5,
-    streakDays: 4,
+    level: 1,
+    weeklyXp: 0,
+    studyHours: 0,
+    questsCompleted: 0,
+    streakDays: 0,
     isCurrentUser: false
   }
 ];
@@ -408,150 +382,62 @@ export const INITIAL_MEMBERS: GuildMember[] = [
     id: 'm1',
     name: 'Ishant Phadatare',
     roleClass: 'Rune Architect',
-    level: 12,
-    status: 'In a quest',
+    level: 1,
+    status: 'In Guild Hall',
     isOnline: true,
     avatarSeed: 'ishant',
     avatarColor: '#06b6d4',
-    currentXp: 420,
-    maxXp: 800
+    currentXp: 0,
+    maxXp: 500
   },
   {
     id: 'm2',
     name: 'Aviral Maurya',
     roleClass: 'Shadow Scholar',
-    level: 14,
-    status: 'In Study Room',
+    level: 1,
+    status: 'In Guild Hall',
     isOnline: true,
     avatarSeed: 'aviral',
     avatarColor: '#38bdf8',
-    currentXp: 690,
-    maxXp: 950
+    currentXp: 0,
+    maxXp: 500
   },
   {
     id: 'm3',
     name: 'Ajay Gurjar',
     roleClass: 'Arcane Healer',
-    level: 13,
+    level: 1,
     status: 'In Guild Hall',
     isOnline: true,
     avatarSeed: 'ajay',
     avatarColor: '#a855f7',
-    currentXp: 510,
-    maxXp: 850
+    currentXp: 0,
+    maxXp: 500
   },
   {
     id: 'm4',
     name: 'Eknaath Bawane',
     roleClass: 'Blade of Logic',
-    level: 13,
-    status: 'In Boss Arena',
+    level: 1,
+    status: 'In Guild Hall',
     isOnline: true,
     avatarSeed: 'eknaath',
     avatarColor: '#ef4444',
-    currentXp: 610,
-    maxXp: 850
-  },
-  {
-    id: 'm5',
-    name: 'Kai',
-    roleClass: 'Starbound Coder',
-    level: 12,
-    status: 'In Study Room',
-    isOnline: true,
-    avatarSeed: 'kai',
-    avatarColor: '#10b981',
-    currentXp: 380,
-    maxXp: 800
-  },
-  {
-    id: 'm6',
-    name: 'Sora',
-    roleClass: 'Windcaller',
-    level: 11,
-    status: 'Online',
-    isOnline: true,
-    avatarSeed: 'sora',
-    avatarColor: '#f59e0b',
-    currentXp: 720,
-    maxXp: 750
-  },
-  {
-    id: 'm7',
-    name: 'Yuki',
-    roleClass: 'Chrono Mage',
-    level: 10,
-    status: 'Offline',
-    isOnline: false,
-    avatarSeed: 'yuki',
-    avatarColor: '#64748b',
-    currentXp: 210,
-    maxXp: 700
-  },
-  {
-    id: 'm8',
-    name: 'Kael',
-    roleClass: 'Cipher Knight',
-    level: 9,
-    status: 'Offline',
-    isOnline: false,
-    avatarSeed: 'kael',
-    avatarColor: '#475569',
-    currentXp: 180,
-    maxXp: 650
+    currentXp: 0,
+    maxXp: 500
   }
 ];
 
 export const INITIAL_ACTIVITIES: ActivityItem[] = [
   {
     id: 'act-1',
-    userName: 'Aviral Maurya',
-    userAvatarSeed: 'aviral',
-    userAvatarColor: '#38bdf8',
-    actionText: 'completed',
-    target: 'Python Core & Scripting',
-    timestamp: '2m ago',
-    type: 'quest'
-  },
-  {
-    id: 'act-2',
-    userName: 'Eknaath Bawane',
-    userAvatarSeed: 'eknaath',
-    userAvatarColor: '#ef4444',
-    actionText: 'leveled up to',
-    target: 'Lv. 13',
-    timestamp: '12m ago',
-    type: 'level'
-  },
-  {
-    id: 'act-3',
-    userName: 'Shadow Protocol',
-    userAvatarSeed: 'sp',
-    userAvatarColor: '#06b6d4',
-    actionText: 'unlocked the',
-    target: 'Git Collaboration achievement',
-    timestamp: '1h ago',
-    type: 'achievement'
-  },
-  {
-    id: 'act-4',
-    userName: 'Ishant Phadatare',
-    userAvatarSeed: 'ishant',
-    userAvatarColor: '#06b6d4',
-    actionText: 'joined',
-    target: 'Study Sanctuary',
-    timestamp: '2h ago',
+    userName: 'Mentor Astra',
+    userAvatarSeed: 'Mentor Astra',
+    userAvatarColor: '#14b8a6',
+    actionText: 'welcomed adventurers to',
+    target: 'Shadow Protocol Guild Hall',
+    timestamp: 'Just now',
     type: 'study'
-  },
-  {
-    id: 'act-5',
-    userName: 'Ajay Gurjar',
-    userAvatarSeed: 'ajay',
-    userAvatarColor: '#06b6d4',
-    actionText: 'cleared',
-    target: 'Git Branching & Merge Conflicts',
-    timestamp: '3h ago',
-    type: 'quest'
   }
 ];
 
@@ -629,40 +515,13 @@ export const INITIAL_STUDY_ROOM: StudyRoom = INITIAL_STUDY_ROOMS[0];
 
 export const INITIAL_NOTIFICATIONS: AppNotification[] = [
   {
-    id: 'notif-1',
-    title: 'Boss Phase 2 Unlocked!',
-    desc: 'The Query Devourer has retreated into The Join Labyrinth. Ready your indexes.',
-    time: '10m ago',
+    id: 'notif-welcome',
+    title: 'Welcome to GuildUp!',
+    desc: 'Your party is assembled. Select a quest from the curriculum board or join a Study Chamber.',
+    time: 'Just now',
     unread: true,
-    type: 'boss',
-    targetTab: 'boss_arena'
-  },
-  {
-    id: 'notif-2',
-    title: 'Party Study Session Active',
-    desc: 'Aviral Maurya and 2 others are currently live in Study Sanctuary.',
-    time: '25m ago',
-    unread: true,
-    type: 'study',
-    targetTab: 'study_rooms'
-  },
-  {
-    id: 'notif-3',
-    title: 'Daily Streak Bonus Claimed',
-    desc: '5-day streak maintained! +50 bonus XP claimed.',
-    time: '2h ago',
-    unread: false,
-    type: 'streak',
+    type: 'party',
     targetTab: 'guild_hall'
-  },
-  {
-    id: 'notif-4',
-    title: 'New Quest Track: Learning Python',
-    desc: 'Master variables, data structures, and list comprehensions.',
-    time: '4h ago',
-    unread: true,
-    type: 'quest',
-    targetTab: 'quests'
   }
 ];
 

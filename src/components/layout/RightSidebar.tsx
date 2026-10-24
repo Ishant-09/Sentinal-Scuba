@@ -77,7 +77,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-teal-950/60 text-teal-300 border border-teal-800/50 font-semibold">
-                12/24
+                {members.filter((m) => m.isOnline).length}/{members.length}
               </span>
               {isMobileDrawer && onCloseMobile && (
                 <button

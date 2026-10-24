@@ -15,18 +15,26 @@ import {
   Radio,
   Sparkles,
   LogOut,
-  PhoneOff
+  PhoneOff,
+  UserPlus,
+  Copy,
+  Check,
+  X
 } from 'lucide-react';
-import { StudyRoom, UserProfile, StudyRoomTab } from '../../types';
+import { StudyRoom, UserProfile, GuildMember, StudyRoomTab } from '../../types';
+import { Avatar } from '../common/Avatar';
 import { FocusChamberView } from './FocusChamberView';
 import { ScreenShareView } from './ScreenShareView';
 import { Whiteboard } from './Whiteboard';
 import { MiniGamesView } from './MiniGamesView';
 import { RoomNotesChat } from './RoomNotesChat';
+import { useSocket } from '../../realtime/socket';
+import { api } from '../../api/client';
 
 interface DedicatedStudyRoomViewProps {
   studyRoom: StudyRoom;
   user: UserProfile;
+  members?: GuildMember[];
   onLeaveRoom: () => void;
   onEndChamber?: () => void;
   onRewardXp?: (amount: number, reason: string) => void;
@@ -36,19 +44,58 @@ interface DedicatedStudyRoomViewProps {
 export const DedicatedStudyRoomView: React.FC<DedicatedStudyRoomViewProps> = ({
   studyRoom,
   user,
+  members = [],
   onLeaveRoom,
   onEndChamber,
   onRewardXp,
   isStandaloneTab = false
 }) => {
+  const { emit } = useSocket();
   const [currentTab, setCurrentTab] = useState<StudyRoomTab>('focus');
   const [isMuted, setIsMuted] = useState(true);
   const [isDeafened, setIsDeafened] = useState(false);
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [invitedFriends, setInvitedFriends] = useState<string[]>([]);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  const roomShareUrl = `${window.location.origin}/?room=${studyRoom.id}`;
 
   const handleOpenInNewTab = () => {
-    const url = `${window.location.origin}${window.location.pathname}?room=${studyRoom.id}`;
-    window.open(url, '_blank');
+    window.open(roomShareUrl, '_blank');
   };
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(roomShareUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  const handleInviteFriend = async (friend: GuildMember) => {
+    if (invitedFriends.includes(friend.name)) return;
+    setInvitedFriends((prev) => [...prev, friend.name]);
+
+    // 1. Emit live notification over Socket.IO to friend's device
+    if (emit) {
+      emit('notification:send', {
+        id: `notif-invite-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+        type: 'study',
+        title: 'Study Sanctuary Invite',
+        desc: `${user.name} invited you to join "${studyRoom.name}" (${studyRoom.topic})!`,
+        timestamp: 'Just now',
+        unread: true,
+        actionUrl: `?room=${studyRoom.id}`,
+        roomId: studyRoom.id,
+        roomName: studyRoom.name
+      });
+    }
+
+    // 2. Persist invite via backend API
+    try {
+      await api.studyRooms.inviteFriends(studyRoom.id, [friend.name], user.name);
+    } catch {}
+  };
+
+  const availableFriends = members.filter((m) => m.name !== user.name);
 
   return (
     <div className="flex flex-col h-full w-full bg-[#070b13] text-slate-200 select-none overflow-hidden">
@@ -188,6 +235,16 @@ export const DedicatedStudyRoomView: React.FC<DedicatedStudyRoomViewProps> = ({
             {isDeafened ? <VolumeX className="w-3.5 h-3.5 text-rose-400" /> : <Volume2 className="w-3.5 h-3.5" />}
           </button>
 
+          {/* Invite Friends Button */}
+          <button
+            onClick={() => setIsInviteModalOpen(true)}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-inner bg-teal-950/80 hover:bg-teal-900 border border-teal-500/50 hover:border-teal-400 text-teal-300 text-xs font-semibold transition-all shadow-sm active:scale-95"
+            title="Invite party friends to this chamber"
+          >
+            <UserPlus className="w-3.5 h-3.5 text-teal-400" />
+            <span className="hidden sm:inline">Invite Friends</span>
+          </button>
+
           {/* Open in Separate Browser Tab button */}
           <button
             onClick={handleOpenInNewTab}
@@ -220,6 +277,107 @@ export const DedicatedStudyRoomView: React.FC<DedicatedStudyRoomViewProps> = ({
         </div>
       </nav>
 
+      {/* Invite Friends Modal */}
+      {isInviteModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="w-full max-w-md bg-[#0d121e] border border-[#1b2538] rounded-xl p-5 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[#182030]">
+              <div>
+                <span className="text-sm font-bold text-white flex items-center gap-2">
+                  <UserPlus className="w-4 h-4 text-teal-400" />
+                  Invite Friends to Chamber
+                </span>
+                <p className="text-[11px] text-teal-400/90 font-mono mt-0.5">{studyRoom.name}</p>
+              </div>
+              <button
+                onClick={() => setIsInviteModalOpen(false)}
+                className="text-slate-400 hover:text-white text-xs font-mono p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Direct Link Section */}
+            <div>
+              <label className="block text-[11px] font-mono text-slate-400 mb-1">
+                Direct Chamber Link
+              </label>
+              <div className="p-2 rounded-inner bg-[#090d16] border border-[#1b2538] flex items-center justify-between gap-2">
+                <span className="text-[10px] font-mono text-teal-300 truncate">{roomShareUrl}</span>
+                <button
+                  onClick={handleCopyLink}
+                  className="px-2 py-1 rounded bg-[#131b2c] hover:bg-[#1a253c] border border-[#1f2d44] text-[10px] font-semibold text-teal-300 flex items-center gap-1 flex-shrink-0"
+                >
+                  {copiedLink ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-teal-400" />}
+                  <span>{copiedLink ? 'Copied' : 'Copy Link'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Friends / Party Members List */}
+            <div>
+              <label className="block text-xs font-bold text-white mb-2">
+                Party Scholars ({availableFriends.length})
+              </label>
+              <div className="space-y-1.5 max-h-48 overflow-y-auto p-1 bg-[#090d16] rounded-inner border border-[#172235]">
+                {availableFriends.map((friend) => {
+                  const isInvited = invitedFriends.includes(friend.name);
+                  return (
+                    <div
+                      key={friend.id}
+                      className="p-2 rounded-inner bg-[#101624] border border-[#1b2538] flex items-center justify-between gap-2"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <Avatar seed={friend.avatarSeed} size="xs" />
+                        <div className="min-w-0">
+                          <span className="text-xs font-semibold text-slate-200 block truncate leading-tight">
+                            {friend.name}
+                          </span>
+                          <span className="text-[10px] text-teal-400 font-mono block truncate">
+                            {friend.roleClass} • Level {friend.level}
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleInviteFriend(friend)}
+                        disabled={isInvited}
+                        className={`px-3 py-1 rounded-inner text-[11px] font-bold transition-all flex items-center gap-1 flex-shrink-0 ${
+                          isInvited
+                            ? 'bg-emerald-950 border border-emerald-500/50 text-emerald-300 cursor-default'
+                            : 'bg-teal-500 hover:bg-teal-400 text-[#070b13] shadow-sm active:scale-95'
+                        }`}
+                      >
+                        {isInvited ? (
+                          <>
+                            <Check className="w-3 h-3 text-emerald-400" />
+                            <span>Invited</span>
+                          </>
+                        ) : (
+                          <>
+                            <UserPlus className="w-3 h-3" />
+                            <span>Invite</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2 border-t border-[#182030]">
+              <button
+                onClick={() => setIsInviteModalOpen(false)}
+                className="px-4 py-1.5 rounded-inner bg-[#121824] hover:bg-[#1a2333] border border-[#1b2538] text-slate-300 hover:text-white text-xs font-semibold"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* =========================================================================
           MAIN STUDY ROOM VIEWPORT
           ========================================================================= */}
@@ -238,7 +396,11 @@ export const DedicatedStudyRoomView: React.FC<DedicatedStudyRoomViewProps> = ({
 
         {currentTab === 'whiteboard' && (
           <div className="h-full">
-            <Whiteboard roomTopic={studyRoom.topic} />
+            <Whiteboard
+              roomId={studyRoom.id}
+              roomTopic={studyRoom.topic}
+              userName={user.name}
+            />
           </div>
         )}
 

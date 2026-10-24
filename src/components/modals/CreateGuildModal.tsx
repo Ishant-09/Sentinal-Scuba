@@ -6,7 +6,7 @@ interface CreateGuildModalProps {
   isOpen: boolean;
   onClose: () => void;
   onCreateGuild: (guild: Guild) => void;
-  onJoinGuildCode: (code: string) => boolean;
+  onJoinGuildCode: (code: string) => boolean | Promise<boolean>;
   onError: (msg: string) => void;
 }
 
@@ -59,7 +59,7 @@ export const CreateGuildModal: React.FC<CreateGuildModalProps> = ({
     onClose();
   };
 
-  const handleJoin = (e: React.FormEvent) => {
+  const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
 
@@ -71,7 +71,7 @@ export const CreateGuildModal: React.FC<CreateGuildModalProps> = ({
       return;
     }
 
-    const success = onJoinGuildCode(cleanCode);
+    const success = await Promise.resolve(onJoinGuildCode(cleanCode));
     if (success) {
       setInviteCode('');
       onClose();

@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Swords, Shield, Zap, Sparkles, AlertCircle, ArrowLeft, Heart, Flame, RefreshCw, CheckCircle2 } from 'lucide-react';
 import { BossEncounter, UserProfile } from '../../types';
 import { ProgressBar } from '../common/ProgressBar';
 import { Avatar } from '../common/Avatar';
 import confetti from 'canvas-confetti';
+import { api } from '../../api/client';
+import { useSocketEvent } from '../../realtime/socket';
 
 interface BossArenaViewProps {
   boss: BossEncounter;
@@ -27,6 +29,28 @@ export const BossArenaView: React.FC<BossArenaViewProps> = ({
   ]);
   const [isCasting, setIsCasting] = useState(false);
   const [lastDamage, setLastDamage] = useState<number | null>(null);
+
+  // Sync HP from props if boss state updates from server
+  useEffect(() => {
+    if (boss.currentPhase?.bossHp !== undefined) {
+      setCurrentHp(boss.currentPhase.bossHp);
+    }
+  }, [boss.currentPhase?.bossHp]);
+
+  // Listen for real-time boss hits from other party members
+  useSocketEvent('boss:hit', (data: any) => {
+    if (typeof data.bossHp === 'number') {
+      setCurrentHp(data.bossHp);
+      setCombatLog((prev) => [
+        `⚔️ ${data.attackerName || 'Party member'} used [${data.abilityName}] dealing ${data.damage}${data.isCritical ? ' (CRITICAL!)' : ''} relational damage!`,
+        ...prev.slice(0, 5)
+      ]);
+      if (data.bossHp <= 0) {
+        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+        onBossDefeated?.();
+      }
+    }
+  });
 
   const attacks = [
     {
@@ -59,9 +83,38 @@ export const BossArenaView: React.FC<BossArenaViewProps> = ({
     }
   ];
 
-  const handleCastSpell = (attack: typeof attacks[0]) => {
+  const handleCastSpell = async (attack: typeof attacks[0]) => {
     if (isCasting || currentHp <= 0) return;
     setIsCasting(true);
+
+    try {
+      const res = await api.boss.attack(attack.name);
+      if (res && typeof res.bossHp === 'number') {
+        setLastDamage(res.damage);
+        setCurrentHp(res.bossHp);
+        setCombatLog((prev) => [
+          `⚔️ ${user.name} (${attack.role}) used [${attack.name}] dealing ${res.damage}${res.isCritical ? ' (CRITICAL!)' : ''} relational damage!`,
+          ...prev.slice(0, 5)
+        ]);
+
+        if (res.bossHp === 0) {
+          confetti({
+            particleCount: 100,
+            spread: 70,
+            origin: { y: 0.6 }
+          });
+          setCombatLog((prev) => [
+            `🏆 VICTORY! The Query Devourer Phase 2 shattered! +400 Guild XP distributed.`,
+            ...prev
+          ]);
+          onBossDefeated?.();
+        }
+        setTimeout(() => setIsCasting(false), 600);
+        return;
+      }
+    } catch {
+      // offline fallback
+    }
 
     const dmg = attack.damage + Math.floor(Math.random() * 200 - 100);
     setLastDamage(dmg);

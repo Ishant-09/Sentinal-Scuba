@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   FileText,
   Send,
@@ -9,8 +9,9 @@ import {
   Sparkles,
   MessageSquare
 } from 'lucide-react';
-import { UserProfile } from '../../types';
+import { UserProfile, ChatMessage } from '../../types';
 import { Avatar } from '../common/Avatar';
+import { liveChatManager } from '../../utils/liveChatSync';
 
 export const RoomNotesChat: React.FC<{
   user: UserProfile;
@@ -36,46 +37,39 @@ export const RoomNotesChat: React.FC<{
       `\`\`\`\n`
   );
 
-  // Chat messages
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      sender: 'Aviral Maurya',
-      avatarSeed: 'aviral',
-      time: '12m ago',
-      text: 'Just finished benchmarking the join order algorithm. Latency dropped by 74% with hash index!'
-    },
-    {
-      id: 2,
-      sender: 'Eknaath Bawane',
-      avatarSeed: 'eknaath',
-      time: '8m ago',
-      text: 'Awesome! Did you push the test case to the devops pipeline?'
-    },
-    {
-      id: 3,
-      sender: 'Ajay Gurjar',
-      avatarSeed: 'ajay',
-      time: '4m ago',
-      text: 'Docker container is built and passing all 14 unit tests on the terminal stream right now.'
-    }
-  ]);
+  const [channelMessages, setChannelMessages] = useState<ChatMessage[]>([]);
   const [inputMsg, setInputMsg] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement | null>(null);
+
+  // Live Sync with multi-device chat manager
+  useEffect(() => {
+    const unsub = liveChatManager.subscribeMessages((store) => {
+      setChannelMessages(store['sql-joins'] || []);
+    });
+    return unsub;
+  }, []);
+
+  useEffect(() => {
+    if (activeSubTab === 'chat') {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [channelMessages.length, activeSubTab]);
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputMsg.trim()) return;
 
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: Date.now(),
-        sender: user.name,
-        avatarSeed: user.avatarSeed,
-        time: 'Just now',
-        text: inputMsg.trim()
-      }
-    ]);
+    const newMsg: ChatMessage = {
+      id: `msg-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      senderName: user.name,
+      senderAvatar: user.avatarSeed,
+      senderRole: user.roleClass,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      text: inputMsg.trim(),
+      reactions: []
+    };
+
+    liveChatManager.sendMessage('sql-joins', newMsg);
     setInputMsg('');
   };
 
@@ -120,7 +114,7 @@ export const RoomNotesChat: React.FC<{
             }`}
           >
             <MessageSquare className="w-3.5 h-3.5" />
-            <span>Chamber Chat ({messages.length})</span>
+            <span>Chamber Chat ({channelMessages.length})</span>
           </button>
         </div>
 
@@ -161,18 +155,19 @@ export const RoomNotesChat: React.FC<{
           <div className="h-full flex flex-col justify-between">
             {/* Messages Stream */}
             <div className="flex-1 overflow-y-auto space-y-3 pr-2 mb-3">
-              {messages.map((m) => (
+              {channelMessages.map((m) => (
                 <div key={m.id} className="bg-[#0c111c] border border-[#172030] rounded-lg p-3 space-y-1">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <Avatar seed={m.avatarSeed} size="sm" />
-                      <span className="text-xs font-bold text-slate-200">{m.sender}</span>
+                      <Avatar seed={m.senderAvatar} size="sm" />
+                      <span className="text-xs font-bold text-slate-200">{m.senderName}</span>
                     </div>
-                    <span className="text-[10px] font-mono text-slate-500">{m.time}</span>
+                    <span className="text-[10px] font-mono text-slate-500">{m.timestamp}</span>
                   </div>
                   <p className="text-xs text-slate-300 pl-7 leading-relaxed">{m.text}</p>
                 </div>
               ))}
+              <div ref={messagesEndRef} />
             </div>
 
             {/* Input Bar */}
@@ -181,12 +176,13 @@ export const RoomNotesChat: React.FC<{
                 type="text"
                 value={inputMsg}
                 onChange={(e) => setInputMsg(e.target.value)}
-                placeholder="Send a study query or code hint to chamber members..."
+                placeholder="Send a live message to all devices..."
                 className="flex-1 bg-[#0c111c] border border-[#182030] focus:border-teal-500 rounded-inner px-3 py-2 text-xs text-slate-200 placeholder-slate-500 focus:outline-none"
               />
               <button
                 type="submit"
-                className="px-4 py-2 rounded-inner bg-teal-500 hover:bg-teal-400 text-[#070b13] font-bold text-xs flex items-center gap-1.5 transition-colors"
+                disabled={!inputMsg.trim()}
+                className="px-4 py-2 rounded-inner bg-teal-500 hover:bg-teal-400 text-[#070b13] font-bold text-xs flex items-center gap-1.5 transition-colors disabled:opacity-40"
               >
                 <Send className="w-3.5 h-3.5" />
                 <span>Send</span>

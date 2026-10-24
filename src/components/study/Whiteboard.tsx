@@ -1,23 +1,23 @@
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import {
   PenTool,
   Eraser,
   Square,
   Circle,
-  Type,
   Trash2,
   Download,
   RotateCcw,
   RotateCw,
-  Plus,
   StickyNote,
   Highlighter,
   Minus,
   Sparkles,
-  Maximize2
+  Users,
+  Radio
 } from 'lucide-react';
+import { useSocket, useSocketEvent } from '../../realtime/socket';
 
-interface StickyNoteItem {
+export interface StickyNoteItem {
   id: string;
   x: number;
   y: number;
@@ -25,9 +25,21 @@ interface StickyNoteItem {
   color: string;
 }
 
-export const Whiteboard: React.FC<{ roomTopic: string }> = ({ roomTopic }) => {
+export interface WhiteboardProps {
+  roomTopic: string;
+  roomId?: string;
+  userName?: string;
+}
+
+export const Whiteboard: React.FC<WhiteboardProps> = ({
+  roomTopic,
+  roomId = 'study-sanctuary',
+  userName = 'Adventurer'
+}) => {
+  const { emit, socket } = useSocket();
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const prevPosRef = useRef<{ x: number; y: number } | null>(null);
 
   // Drawing tools & settings
   const [tool, setTool] = useState<'pen' | 'highlighter' | 'eraser' | 'rect' | 'circle' | 'line'>('pen');
@@ -39,6 +51,9 @@ export const Whiteboard: React.FC<{ roomTopic: string }> = ({ roomTopic }) => {
   // Undo / Redo history
   const [history, setHistory] = useState<ImageData[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number>(-1);
+
+  // Remote collaborator activity indicator
+  const [activeDrawer, setActiveDrawer] = useState<{ name: string; time: number } | null>(null);
 
   // Sticky notes
   const [stickyNotes, setStickyNotes] = useState<StickyNoteItem[]>([
@@ -70,50 +85,8 @@ export const Whiteboard: React.FC<{ roomTopic: string }> = ({ roomTopic }) => {
     { label: 'Slate', value: '#94a3b8' }
   ];
 
-  // Initialize and resize canvas
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const resize = () => {
-      const container = containerRef.current;
-      if (!container) return;
-      const rect = container.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-
-      // Save previous content if any
-      let prevImg: ImageData | null = null;
-      if (canvas.width > 0 && canvas.height > 0) {
-        try {
-          prevImg = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        } catch {
-          // ignore
-        }
-      }
-
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-      canvas.style.width = `${rect.width}px`;
-      canvas.style.height = `${rect.height}px`;
-      ctx.scale(dpr, dpr);
-
-      // Restore or draw initial grid/blueprint
-      if (prevImg) {
-        ctx.putImageData(prevImg, 0, 0);
-      } else {
-        drawInitialBlueprint(ctx, rect.width, rect.height);
-        saveState();
-      }
-    };
-
-    resize();
-    window.addEventListener('resize', resize);
-    return () => window.removeEventListener('resize', resize);
-  }, []);
-
-  const drawInitialBlueprint = (ctx: CanvasRenderingContext2D, width: number, height: number) => {
+  // Helper to draw initial schematic/grid
+  const drawInitialBlueprint = useCallback((ctx: CanvasRenderingContext2D, width: number, height: number) => {
     // Subtle background grid
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.04)';
     ctx.lineWidth = 1;
@@ -173,9 +146,9 @@ export const Whiteboard: React.FC<{ roomTopic: string }> = ({ roomTopic }) => {
     ctx.font = '10px monospace';
     ctx.fillText('1-to-Many JOIN (Hash)', 340, 275);
     ctx.restore();
-  };
+  }, []);
 
-  const saveState = () => {
+  const saveState = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -184,10 +157,173 @@ export const Whiteboard: React.FC<{ roomTopic: string }> = ({ roomTopic }) => {
       const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       setHistory((prev) => [...prev.slice(0, historyIndex + 1), imgData]);
       setHistoryIndex((prev) => prev + 1);
-    } catch {
-      // ignore
+    } catch {}
+  }, [historyIndex]);
+
+  // Execute a normalized remote stroke on canvas
+  const applyRemoteStroke = useCallback((event: any) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const width = rect.width;
+    const height = rect.height;
+
+    ctx.save();
+
+    if (event.type === 'stroke' && event.from && event.to) {
+      const fromX = event.from.x * width;
+      const fromY = event.from.y * height;
+      const toX = event.to.x * width;
+      const toY = event.to.y * height;
+
+      ctx.beginPath();
+      ctx.moveTo(fromX, fromY);
+      ctx.lineTo(toX, toY);
+      ctx.strokeStyle = event.tool === 'highlighter' ? `${event.color}55` : event.color;
+      ctx.lineWidth = event.width || 3;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+
+      if (event.userName && event.userName !== userName) {
+        setActiveDrawer({ name: event.userName, time: Date.now() });
+      }
+    } else if (event.type === 'shape' && event.start && event.end) {
+      const startX = event.start.x * width;
+      const startY = event.start.y * height;
+      const endX = event.end.x * width;
+      const endY = event.end.y * height;
+
+      ctx.strokeStyle = event.color || '#14b8a6';
+      ctx.lineWidth = event.width || 3;
+
+      if (event.shape === 'rect') {
+        ctx.strokeRect(startX, startY, endX - startX, endY - startY);
+      } else if (event.shape === 'circle') {
+        const radius = Math.hypot(endX - startX, endY - startY);
+        ctx.beginPath();
+        ctx.arc(startX, startY, radius, 0, 2 * Math.PI);
+        ctx.stroke();
+      } else if (event.shape === 'line') {
+        ctx.beginPath();
+        ctx.moveTo(startX, startY);
+        ctx.lineTo(endX, endY);
+        ctx.stroke();
+      }
+
+      if (event.userName && event.userName !== userName) {
+        setActiveDrawer({ name: event.userName, time: Date.now() });
+      }
     }
-  };
+
+    ctx.restore();
+  }, [userName]);
+
+  // Listen to remote whiteboard draw events
+  useSocketEvent('whiteboard:draw', (data: any) => {
+    if (!data?.event) return;
+    if (data.roomId && data.roomId !== roomId) return;
+    applyRemoteStroke(data.event);
+  });
+
+  // Also listen to legacy study:strokes
+  useSocketEvent('study:strokes', (data: any) => {
+    if (Array.isArray(data?.strokes)) {
+      data.strokes.forEach((stroke: any) => {
+        applyRemoteStroke(stroke);
+      });
+    }
+  });
+
+  // Listen to remote whiteboard clear
+  useSocketEvent('whiteboard:clear', (data: any) => {
+    if (data?.roomId && data.roomId !== roomId) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const container = containerRef.current;
+    if (container) {
+      const rect = container.getBoundingClientRect();
+      drawInitialBlueprint(ctx, rect.width, rect.height);
+    }
+    saveState();
+    if (data?.userName && data.userName !== userName) {
+      setActiveDrawer({ name: `${data.userName} (cleared board)`, time: Date.now() });
+    }
+  });
+
+  // Listen to remote sticky notes update
+  useSocketEvent('whiteboard:sticky', (data: any) => {
+    if (data?.roomId && data.roomId !== roomId) return;
+    if (Array.isArray(data?.notes)) {
+      setStickyNotes(data.notes);
+    }
+  });
+
+  // Clear remote drawer pill after 2.5 seconds of inactivity
+  useEffect(() => {
+    if (!activeDrawer) return;
+    const timer = setTimeout(() => {
+      setActiveDrawer(null);
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [activeDrawer]);
+
+  // Initialize and resize canvas
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const resize = () => {
+      const container = containerRef.current;
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+
+      let prevImg: ImageData | null = null;
+      if (canvas.width > 0 && canvas.height > 0) {
+        try {
+          prevImg = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        } catch {}
+      }
+
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      canvas.style.width = `${rect.width}px`;
+      canvas.style.height = `${rect.height}px`;
+      ctx.scale(dpr, dpr);
+
+      if (prevImg) {
+        ctx.putImageData(prevImg, 0, 0);
+      } else {
+        drawInitialBlueprint(ctx, rect.width, rect.height);
+        saveState();
+      }
+    };
+
+    resize();
+    window.addEventListener('resize', resize);
+
+    // Initial join & fetch existing board strokes
+    emit('study:join', { roomId });
+    emit('whiteboard:init', { roomId }, (res: any) => {
+      if (Array.isArray(res?.history) && res.history.length > 0) {
+        res.history.forEach((ev: any) => applyRemoteStroke(ev));
+      }
+      if (Array.isArray(res?.stickyNotes) && res.stickyNotes.length > 0) {
+        setStickyNotes(res.stickyNotes);
+      }
+    });
+
+    return () => window.removeEventListener('resize', resize);
+  }, [drawInitialBlueprint, saveState, emit, roomId, applyRemoteStroke]);
 
   const handleUndo = () => {
     if (historyIndex <= 0) return;
@@ -213,34 +349,50 @@ export const Whiteboard: React.FC<{ roomTopic: string }> = ({ roomTopic }) => {
     setHistoryIndex(nextIndex);
   };
 
-  const getCanvasCoordinates = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const getCoordinates = (
+    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
+  ) => {
     const canvas = canvasRef.current;
     if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
+
+    if ('touches' in e) {
+      if (e.touches.length > 0) {
+        return {
+          x: e.touches[0].clientX - rect.left,
+          y: e.touches[0].clientY - rect.top
+        };
+      }
+      return { x: 0, y: 0 };
+    }
+
     return {
       x: e.clientX - rect.left,
       y: e.clientY - rect.top
     };
   };
 
-  const startDraw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleStartDraw = (
+    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
+  ) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const coords = getCanvasCoordinates(e);
+    const coords = getCoordinates(e);
     setIsDrawing(true);
     setStartPos(coords);
+    prevPosRef.current = coords;
 
     ctx.beginPath();
     ctx.moveTo(coords.x, coords.y);
 
     if (tool === 'eraser') {
-      ctx.strokeStyle = '#0a0d14'; // background color
+      ctx.strokeStyle = '#0a0d14';
       ctx.lineWidth = lineWidth * 4;
     } else if (tool === 'highlighter') {
-      ctx.strokeStyle = strokeColor + '55'; // 33% alpha
+      ctx.strokeStyle = `${strokeColor}55`;
       ctx.lineWidth = lineWidth * 3;
     } else {
       ctx.strokeStyle = strokeColor;
@@ -250,22 +402,49 @@ export const Whiteboard: React.FC<{ roomTopic: string }> = ({ roomTopic }) => {
     ctx.lineJoin = 'round';
   };
 
-  const draw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleDraw = (
+    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
+  ) => {
     if (!isDrawing) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    if (!ctx || !prevPosRef.current) return;
 
-    const coords = getCanvasCoordinates(e);
+    const coords = getCoordinates(e);
+    const prevCoords = prevPosRef.current;
 
     if (tool === 'pen' || tool === 'highlighter' || tool === 'eraser') {
       ctx.lineTo(coords.x, coords.y);
       ctx.stroke();
+
+      // Broadcast live stroke segment to other scholars in real time
+      const rect = canvas.getBoundingClientRect();
+      const fromNorm = { x: prevCoords.x / rect.width, y: prevCoords.y / rect.height };
+      const toNorm = { x: coords.x / rect.width, y: coords.y / rect.height };
+
+      const strokeEvent = {
+        type: 'stroke',
+        tool,
+        color: tool === 'eraser' ? '#0a0d14' : strokeColor,
+        width: tool === 'eraser' ? lineWidth * 4 : tool === 'highlighter' ? lineWidth * 3 : lineWidth,
+        from: fromNorm,
+        to: toNorm,
+        userName
+      };
+
+      emit('whiteboard:draw', {
+        roomId,
+        event: strokeEvent
+      });
+
+      prevPosRef.current = coords;
     }
   };
 
-  const stopDraw = (e: React.MouseEvent<HTMLCanvasElement>) => {
+  const handleStopDraw = (
+    e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>
+  ) => {
     if (!isDrawing) return;
     setIsDrawing(false);
 
@@ -274,12 +453,31 @@ export const Whiteboard: React.FC<{ roomTopic: string }> = ({ roomTopic }) => {
     const ctx = canvas.getContext('2d');
     if (!ctx || !startPos) return;
 
-    const coords = getCanvasCoordinates(e);
+    // Use current coords or fallback to start
+    let coords = getCoordinates(e);
+    if ('touches' in e && coords.x === 0 && coords.y === 0 && prevPosRef.current) {
+      coords = prevPosRef.current;
+    }
+
+    const rect = canvas.getBoundingClientRect();
 
     if (tool === 'rect') {
       ctx.strokeStyle = strokeColor;
       ctx.lineWidth = lineWidth;
       ctx.strokeRect(startPos.x, startPos.y, coords.x - startPos.x, coords.y - startPos.y);
+
+      emit('whiteboard:draw', {
+        roomId,
+        event: {
+          type: 'shape',
+          shape: 'rect',
+          color: strokeColor,
+          width: lineWidth,
+          start: { x: startPos.x / rect.width, y: startPos.y / rect.height },
+          end: { x: coords.x / rect.width, y: coords.y / rect.height },
+          userName
+        }
+      });
     } else if (tool === 'circle') {
       ctx.strokeStyle = strokeColor;
       ctx.lineWidth = lineWidth;
@@ -287,6 +485,19 @@ export const Whiteboard: React.FC<{ roomTopic: string }> = ({ roomTopic }) => {
       ctx.beginPath();
       ctx.arc(startPos.x, startPos.y, radius, 0, 2 * Math.PI);
       ctx.stroke();
+
+      emit('whiteboard:draw', {
+        roomId,
+        event: {
+          type: 'shape',
+          shape: 'circle',
+          color: strokeColor,
+          width: lineWidth,
+          start: { x: startPos.x / rect.width, y: startPos.y / rect.height },
+          end: { x: coords.x / rect.width, y: coords.y / rect.height },
+          userName
+        }
+      });
     } else if (tool === 'line') {
       ctx.strokeStyle = strokeColor;
       ctx.lineWidth = lineWidth;
@@ -294,9 +505,23 @@ export const Whiteboard: React.FC<{ roomTopic: string }> = ({ roomTopic }) => {
       ctx.moveTo(startPos.x, startPos.y);
       ctx.lineTo(coords.x, coords.y);
       ctx.stroke();
+
+      emit('whiteboard:draw', {
+        roomId,
+        event: {
+          type: 'shape',
+          shape: 'line',
+          color: strokeColor,
+          width: lineWidth,
+          start: { x: startPos.x / rect.width, y: startPos.y / rect.height },
+          end: { x: coords.x / rect.width, y: coords.y / rect.height },
+          userName
+        }
+      });
     }
 
     setStartPos(null);
+    prevPosRef.current = null;
     saveState();
   };
 
@@ -312,6 +537,12 @@ export const Whiteboard: React.FC<{ roomTopic: string }> = ({ roomTopic }) => {
       drawInitialBlueprint(ctx, rect.width, rect.height);
     }
     saveState();
+
+    // Broadcast clear event to other party scholars
+    emit('whiteboard:clear', {
+      roomId,
+      userName
+    });
   };
 
   const handleDownload = () => {
@@ -328,10 +559,24 @@ export const Whiteboard: React.FC<{ roomTopic: string }> = ({ roomTopic }) => {
       id: `sn-${Date.now()}`,
       x: 120 + Math.random() * 200,
       y: 120 + Math.random() * 150,
-      text: 'New study note...',
+      text: 'New party rune note...',
       color: 'bg-indigo-950/80 border-indigo-500/60 text-indigo-200'
     };
-    setStickyNotes((prev) => [...prev, newNote]);
+    const updated = [...stickyNotes, newNote];
+    setStickyNotes(updated);
+    emit('whiteboard:sticky', { roomId, notes: updated });
+  };
+
+  const handleUpdateSticky = (id: string, text: string) => {
+    const updated = stickyNotes.map((n) => (n.id === id ? { ...n, text } : n));
+    setStickyNotes(updated);
+    emit('whiteboard:sticky', { roomId, notes: updated });
+  };
+
+  const handleDeleteSticky = (id: string) => {
+    const updated = stickyNotes.filter((n) => n.id !== id);
+    setStickyNotes(updated);
+    emit('whiteboard:sticky', { roomId, notes: updated });
   };
 
   return (
@@ -408,7 +653,9 @@ export const Whiteboard: React.FC<{ roomTopic: string }> = ({ roomTopic }) => {
               }}
               style={{ backgroundColor: c.value }}
               className={`w-4 h-4 rounded-full transition-transform ${
-                strokeColor === c.value ? 'scale-125 ring-2 ring-white/80 ring-offset-1 ring-offset-[#111724]' : 'opacity-80 hover:opacity-100 hover:scale-110'
+                strokeColor === c.value
+                  ? 'scale-125 ring-2 ring-white/80 ring-offset-1 ring-offset-[#111724]'
+                  : 'opacity-80 hover:opacity-100 hover:scale-110'
               }`}
               title={c.label}
             />
@@ -472,13 +719,16 @@ export const Whiteboard: React.FC<{ roomTopic: string }> = ({ roomTopic }) => {
       </div>
 
       {/* Main Interactive Canvas Area */}
-      <div ref={containerRef} className="relative flex-1 w-full h-full cursor-crosshair overflow-hidden">
+      <div ref={containerRef} className="relative flex-1 w-full h-full cursor-crosshair overflow-hidden touch-none">
         <canvas
           ref={canvasRef}
-          onMouseDown={startDraw}
-          onMouseMove={draw}
-          onMouseUp={stopDraw}
-          onMouseLeave={stopDraw}
+          onMouseDown={handleStartDraw}
+          onMouseMove={handleDraw}
+          onMouseUp={handleStopDraw}
+          onMouseLeave={handleStopDraw}
+          onTouchStart={handleStartDraw}
+          onTouchMove={handleDraw}
+          onTouchEnd={handleStopDraw}
           className="absolute inset-0 z-10 touch-none"
         />
 
@@ -492,7 +742,7 @@ export const Whiteboard: React.FC<{ roomTopic: string }> = ({ roomTopic }) => {
             <div className="flex items-center justify-between mb-1 pb-1 border-b border-white/10 text-[10px] font-mono opacity-70">
               <span>RUNE NOTE</span>
               <button
-                onClick={() => setStickyNotes((prev) => prev.filter((n) => n.id !== note.id))}
+                onClick={() => handleDeleteSticky(note.id)}
                 className="hover:text-rose-400 transition-colors"
               >
                 ×
@@ -500,22 +750,25 @@ export const Whiteboard: React.FC<{ roomTopic: string }> = ({ roomTopic }) => {
             </div>
             <textarea
               value={note.text}
-              onChange={(e) => {
-                const val = e.target.value;
-                setStickyNotes((prev) =>
-                  prev.map((n) => (n.id === note.id ? { ...n, text: val } : n))
-                );
-              }}
+              onChange={(e) => handleUpdateSticky(note.id, e.target.value)}
               className="w-full bg-transparent border-none resize-none text-xs leading-relaxed focus:outline-none placeholder-white/40"
               rows={3}
             />
           </div>
         ))}
 
+        {/* Active Remote Collaborator Drawing Pill */}
+        {activeDrawer && (
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-3 py-1 rounded-full bg-teal-950/90 border border-teal-500/60 text-teal-200 text-xs font-mono shadow-[0_0_15px_rgba(20,184,166,0.4)] animate-pulse backdrop-blur-md">
+            <Sparkles className="w-3.5 h-3.5 text-teal-300" />
+            <span>{activeDrawer.name} is sketching live...</span>
+          </div>
+        )}
+
         {/* Bottom Collaboration Indicator Badge */}
         <div className="absolute bottom-3 left-3 z-20 flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#0c1018]/90 border border-teal-500/30 text-[11px] font-mono text-teal-300 backdrop-blur-sm pointer-events-none">
           <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
-          <span>Real-Time Multi-Rune Canvas • {roomTopic}</span>
+          <span>Multi-Device Live Sync • {roomTopic}</span>
         </div>
       </div>
     </div>

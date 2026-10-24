@@ -49,12 +49,29 @@ import { WhisperModal } from './components/modals/WhisperModal';
 import { UserProfileModal } from './components/modals/UserProfileModal';
 import { FloatingVoiceWidget } from './components/study/FloatingVoiceWidget';
 import { ToastContainer, ToastMessage } from './components/common/Toast';
+import { AuthModal } from './components/auth/AuthModal';
+import { LoginPage } from './components/auth/LoginPage';
+
+import { useSocket, useSocketEvent } from './realtime/socket';
+import { api, setAccessToken } from './api/client';
+import { liveChatManager } from './utils/liveChatSync';
 
 import confetti from 'canvas-confetti';
 
 export const App: React.FC = () => {
   // Navigation & View State
-  const [currentTab, setCurrentTab] = useState<NavigationItem>('guild_hall');
+  const [currentTab, setCurrentTab] = useState<NavigationItem>(() => {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const tab = urlParams.get('tab') as NavigationItem;
+      if (tab) return tab;
+      const room = urlParams.get('room');
+      if (room) return 'study_rooms';
+    } catch {
+      // ignore
+    }
+    return 'guild_hall';
+  });
   const [selectedGuildId, setSelectedGuildId] = useState<string>('shadow-protocol');
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -102,11 +119,67 @@ export const App: React.FC = () => {
   const [isMobileMembersOpen, setIsMobileMembersOpen] = useState(false);
 
   // Domain State
-  const [user, setUser] = useState<UserProfile>(INITIAL_USER);
+  const [user, setUser] = useState<UserProfile>(() => {
+    try {
+      const saved = localStorage.getItem('guildup_username');
+      if (saved) {
+        const cleanHandle = saved.toLowerCase().replace(/[^a-z0-9_-]/g, '_').slice(0, 30) || 'scholar';
+        return {
+          ...INITIAL_USER,
+          id: `usr-${cleanHandle}`,
+          name: saved,
+          handle: `@${cleanHandle}`,
+          avatarSeed: cleanHandle
+        };
+      }
+    } catch {}
+    return INITIAL_USER;
+  });
+
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean>(() => {
+    try {
+      return !!localStorage.getItem('guildup_logged_in');
+    } catch {
+      return false;
+    }
+  });
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [guilds, setGuilds] = useState<Guild[]>(INITIAL_GUILDS);
   const [boss, setBoss] = useState<BossEncounter>(INITIAL_BOSS);
   const [quests, setQuests] = useState<Quest[]>(INITIAL_QUESTS);
-  const [members] = useState<GuildMember[]>(INITIAL_MEMBERS);
+  const [members, setMembers] = useState<GuildMember[]>(() => {
+    try {
+      const saved = localStorage.getItem('guildup_username');
+      if (saved) {
+        const cleanHandle = saved.toLowerCase().replace(/[^a-z0-9_-]/g, '_').slice(0, 30) || 'scholar';
+        const exists = INITIAL_MEMBERS.find(
+          (m) => m.name.toLowerCase() === saved.toLowerCase() || m.id === `usr-${cleanHandle}`
+        );
+        if (exists) {
+          return INITIAL_MEMBERS.map((m) =>
+            m.name.toLowerCase() === saved.toLowerCase() || m.id === `usr-${cleanHandle}`
+              ? { ...m, isOnline: true, status: 'In Guild Hall' }
+              : m
+          );
+        } else {
+          const newMember: GuildMember = {
+            id: `usr-${cleanHandle}`,
+            name: saved,
+            roleClass: 'Rune Scholar',
+            level: 1,
+            status: 'In Guild Hall',
+            isOnline: true,
+            avatarSeed: cleanHandle,
+            avatarColor: '#06b6d4',
+            currentXp: 0,
+            maxXp: 500
+          };
+          return [newMember, ...INITIAL_MEMBERS];
+        }
+      }
+    } catch {}
+    return INITIAL_MEMBERS;
+  });
   const [activities, setActivities] = useState<ActivityItem[]>(INITIAL_ACTIVITIES);
   const [studyRooms, setStudyRooms] = useState<StudyRoom[]>(INITIAL_STUDY_ROOMS);
   const [activeStudyRoomId, setActiveStudyRoomId] = useState<string | null>(() => {
@@ -123,17 +196,20 @@ export const App: React.FC = () => {
   // Check URL query param on mount and when popstate occurs
   useEffect(() => {
     try {
-      const checkUrlRoom = () => {
+      const checkUrlParams = () => {
         const urlParams = new URLSearchParams(window.location.search);
+        const tab = urlParams.get('tab') as NavigationItem;
         const room = urlParams.get('room');
-        if (room) {
+        if (tab) {
+          setCurrentTab(tab);
+        } else if (room) {
           setCurrentTab('study_rooms');
           setActiveStudyRoomId(room);
         }
       };
-      checkUrlRoom();
-      window.addEventListener('popstate', checkUrlRoom);
-      return () => window.removeEventListener('popstate', checkUrlRoom);
+      checkUrlParams();
+      window.addEventListener('popstate', checkUrlParams);
+      return () => window.removeEventListener('popstate', checkUrlParams);
     } catch {
       // ignore
     }
@@ -153,8 +229,11 @@ export const App: React.FC = () => {
     setNotifications((prev) =>
       prev.map((n) => (n.id === notif.id ? { ...n, unread: false } : n))
     );
-    // Navigate to target view if defined
-    if (notif.targetTab) {
+    // Navigate directly into chamber if this is a chamber invite
+    if (notif.roomId) {
+      setCurrentTab('study_rooms');
+      setActiveStudyRoomId(notif.roomId);
+    } else if (notif.targetTab) {
       setCurrentTab(notif.targetTab);
       if (notif.targetTab === 'study_rooms' && !activeStudyRoomId) {
         setActiveStudyRoomId(INITIAL_STUDY_ROOM.id);
@@ -172,6 +251,101 @@ export const App: React.FC = () => {
     addToast('info', 'Notifications Cleared', 'All notification logs have been removed.');
   };
 
+  const handleLogin = async (username: string) => {
+    setIsLoggingIn(true);
+    const trimmed = username.trim();
+    const cleanHandle = trimmed.toLowerCase().replace(/[^a-z0-9_-]/g, '_').slice(0, 30) || 'scholar';
+
+    const newProfile: UserProfile = {
+      ...INITIAL_USER,
+      id: `usr-${cleanHandle}`,
+      name: trimmed,
+      handle: `@${cleanHandle}`,
+      avatarSeed: cleanHandle,
+      roleClass: 'Rune Scholar',
+      level: 1,
+      currentXp: 0,
+      maxXp: 1000,
+      dailyStreak: 1,
+      questsCompletedThisWeek: 0,
+      masteryScore: 0
+    };
+
+    setUser(newProfile);
+    setIsLoggedIn(true);
+
+    // Add profile to Guild Members roster immediately
+    setMembers((prev) => {
+      const exists = prev.some(
+        (m) => m.name.toLowerCase() === trimmed.toLowerCase() || m.id === newProfile.id
+      );
+      if (exists) {
+        return prev.map((m) =>
+          m.name.toLowerCase() === trimmed.toLowerCase() || m.id === newProfile.id
+            ? { ...m, isOnline: true, status: 'In Guild Hall' }
+            : m
+        );
+      }
+      const newMember: GuildMember = {
+        id: newProfile.id || `usr-${cleanHandle}`,
+        name: trimmed,
+        roleClass: newProfile.roleClass || 'Rune Scholar',
+        level: newProfile.level || 1,
+        status: 'In Guild Hall',
+        isOnline: true,
+        avatarSeed: cleanHandle,
+        avatarColor: '#06b6d4',
+        currentXp: newProfile.currentXp || 0,
+        maxXp: newProfile.maxXp || 500
+      };
+      return [newMember, ...prev];
+    });
+
+    // Increment guild member count
+    setGuilds((prev) =>
+      prev.map((g) =>
+        g.id === selectedGuildId
+          ? { ...g, memberCount: Math.max(g.memberCount, members.length + 1) }
+          : g
+      )
+    );
+
+    try {
+      localStorage.setItem('guildup_logged_in', 'true');
+      localStorage.setItem('guildup_username', trimmed);
+    } catch {}
+
+    addToast('success', `Welcome to GuildUp, ${trimmed}!`, 'Adventurer profile initialized & live sync active.');
+
+    try {
+      const res = await api.auth.usernameLogin(trimmed);
+      if (res?.accessToken) {
+        setAccessToken(res.accessToken);
+      }
+      if (res?.user) {
+        setUser((prev) => ({
+          ...prev,
+          ...res.user,
+          name: res.user.name || trimmed
+        }));
+      }
+    } catch {
+      // offline/fallback mode
+    } finally {
+      setIsLoggingIn(false);
+    }
+  };
+
+  const handleLogout = () => {
+    setIsLoggedIn(false);
+    try {
+      localStorage.removeItem('guildup_logged_in');
+    } catch {}
+    setAccessToken(null);
+    api.auth.logout().catch(() => {});
+    addToast('info', 'Logged Out', 'Returned to Adventurer Login Screen.');
+  };
+
   const handleDeleteNotification = (id: string) => {
     setNotifications((prev) => prev.filter((n) => n.id !== id));
   };
@@ -187,7 +361,7 @@ export const App: React.FC = () => {
     addToast('success', 'Voice Connected', `Connected to ${target.name}`);
   };
 
-  const handleEndChamber = (chamberId: string) => {
+  const handleEndChamber = async (chamberId: string) => {
     const target = studyRooms.find((r) => r.id === chamberId);
     // Remove from studyRooms so it NEVER shows up in Study Chambers & Virtual Rooms section
     setStudyRooms((prev) => prev.filter((r) => r.id !== chamberId));
@@ -210,6 +384,12 @@ export const App: React.FC = () => {
       'Chamber Ended',
       `"${target?.name || 'Study Chamber'}" has ended and was removed from virtual rooms.`
     );
+
+    try {
+      await api.studyRooms.endRoom(chamberId);
+    } catch {
+      // offline fallback
+    }
   };
 
   // Modals & Popouts State
@@ -228,17 +408,318 @@ export const App: React.FC = () => {
   const [selectedMemberForPopout, setSelectedMemberForPopout] = useState<GuildMember | null>(null);
   const [activeWhisperMember, setActiveWhisperMember] = useState<GuildMember | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [leaderboard, setLeaderboard] = useState(INITIAL_LEADERBOARD);
+
+  const { status, socket, emit } = useSocket();
+
+  useEffect(() => {
+    if (socket) {
+      liveChatManager.setSocketEmit(emit);
+    }
+  }, [socket, emit]);
+
+  // Load initial authoritative data from backend API
+  useEffect(() => {
+    let isMounted = true;
+    async function loadInitialBackendData() {
+      try {
+        const [meRes, guildsRes, questsRes, roomsRes, bossRes, lbRes, notifsRes, membersRes] = await Promise.allSettled([
+          api.users.getMe(),
+          api.guilds.getMyGuilds(),
+          api.quests.getQuests(),
+          api.studyRooms.getRooms(),
+          api.boss.getCurrent(),
+          api.leaderboard.getWeekly(),
+          api.achievements.getNotifications(),
+          api.guilds.getMembers(selectedGuildId)
+        ]);
+
+        if (!isMounted) return;
+
+        if (meRes.status === 'fulfilled' && meRes.value?.user) {
+          setUser(meRes.value.user);
+        }
+        if (guildsRes.status === 'fulfilled' && guildsRes.value?.guilds?.length) {
+          setGuilds(guildsRes.value.guilds);
+          if (!guildsRes.value.guilds.some((g: any) => g.id === selectedGuildId)) {
+            setSelectedGuildId(guildsRes.value.guilds[0].id);
+          }
+        }
+        if (questsRes.status === 'fulfilled' && questsRes.value?.quests?.length) {
+          setQuests(questsRes.value.quests);
+        }
+        if (roomsRes.status === 'fulfilled' && roomsRes.value?.rooms?.length) {
+          setStudyRooms(roomsRes.value.rooms);
+        }
+        if (bossRes.status === 'fulfilled' && bossRes.value?.boss) {
+          setBoss(bossRes.value.boss);
+        }
+        if (lbRes.status === 'fulfilled' && lbRes.value?.leaderboard?.length) {
+          setLeaderboard(lbRes.value.leaderboard);
+        }
+        if (notifsRes.status === 'fulfilled' && notifsRes.value?.notifications?.length) {
+          setNotifications(notifsRes.value.notifications);
+        }
+        if (membersRes.status === 'fulfilled' && membersRes.value?.members?.length) {
+          setMembers((prev) => {
+            const map = new Map(prev.map((m) => [m.name.toLowerCase(), m]));
+            for (const m of membersRes.value.members) {
+              map.set(m.name.toLowerCase(), {
+                id: m.id,
+                name: m.name,
+                roleClass: m.roleClass,
+                level: m.level,
+                status: m.status || 'In Guild Hall',
+                isOnline: true,
+                avatarSeed: m.avatarSeed || m.name.toLowerCase(),
+                avatarColor: m.avatarColor || '#06b6d4',
+                currentXp: m.currentXp || 0,
+                maxXp: m.maxXp || 500
+              });
+            }
+            return Array.from(map.values());
+          });
+        }
+      } catch {
+        // Fallback to initial mock data (offline mode)
+      }
+    }
+
+    loadInitialBackendData();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // Real-Time Socket Event Handlers
+  useSocketEvent('xp:gained', (data: any) => {
+    if (typeof data.newXp === 'number') {
+      setUser((prev) => ({
+        ...prev,
+        currentXp: data.newXp,
+        level: data.level ?? prev.level
+      }));
+    }
+  });
+
+  useSocketEvent('level:up', (data: any) => {
+    confetti({ particleCount: 140, spread: 85, origin: { y: 0.6 } });
+    addToast('achievement', `LEVEL UP! Level ${data.newLevel} Reached!`, `Congratulations! ${data.message || 'Level milestone unlocked!'}`);
+  });
+
+  useSocketEvent('user:stats', (data: any) => {
+    setUser((prev) => ({ ...prev, ...data }));
+  });
+
+  useSocketEvent('quest:progress', (data: any) => {
+    setQuests((prev) =>
+      prev.map((q) => {
+        if (q.id !== data.questId) return q;
+        const updatedSteps = q.steps.map((s, idx) =>
+          data.stepIndex !== undefined && idx === data.stepIndex ? { ...s, completed: true } : s
+        );
+        return {
+          ...q,
+          steps: updatedSteps,
+          progress: data.progress ?? q.progress,
+          completed: data.completed ?? q.completed
+        };
+      })
+    );
+  });
+
+  useSocketEvent('guild:member_joined', (newMember: any) => {
+    if (!newMember?.name) return;
+    setMembers((prev) => {
+      const exists = prev.some(
+        (m) => m.id === newMember.id || m.name.toLowerCase() === newMember.name.toLowerCase()
+      );
+      if (exists) {
+        return prev.map((m) =>
+          m.id === newMember.id || m.name.toLowerCase() === newMember.name.toLowerCase()
+            ? { ...m, ...newMember, isOnline: true }
+            : m
+        );
+      }
+      return [newMember, ...prev];
+    });
+    setGuilds((prev) =>
+      prev.map((g) =>
+        g.id === selectedGuildId
+          ? { ...g, memberCount: (g.memberCount || 0) + 1 }
+          : g
+      )
+    );
+    addToast('info', 'New Scholar in Guild', `${newMember.name} joined the sanctum roster.`);
+  });
+
+  useSocketEvent('guild:stats', (data: any) => {
+    if (typeof data?.currentXp === 'number') {
+      setGuilds((prev) =>
+        prev.map((g) =>
+          g.id === selectedGuildId
+            ? {
+                ...g,
+                currentXp: data.currentXp,
+                level: data.level ?? g.level,
+                maxXp: data.maxXp ?? g.maxXp
+              }
+            : g
+        )
+      );
+    }
+  });
+
+  useSocketEvent('guild:activity', (act: ActivityItem) => {
+    if (act?.userName) {
+      setActivities((prev) => [act, ...prev.slice(0, 29)]);
+    }
+  });
+
+  useSocketEvent('boss:hit', (data: any) => {
+    if (typeof data.bossHp === 'number') {
+      setBoss((prev) => ({
+        ...prev,
+        currentPhase: {
+          ...prev.currentPhase,
+          bossHp: data.bossHp
+        }
+      }));
+    }
+  });
+
+  useSocketEvent('boss:phase', (data: any) => {
+    setBoss((prev) => ({
+      ...prev,
+      currentPhase: {
+        ...prev.currentPhase,
+        name: data.phaseName || prev.currentPhase.name,
+        bossHp: data.bossHp ?? prev.currentPhase.bossHp
+      }
+    }));
+  });
+
+  useSocketEvent('boss:defeated', (data: any) => {
+    setBoss((prev) => ({
+      ...prev,
+      overallProgress: 100,
+      currentPhase: {
+        ...prev.currentPhase,
+        bossHp: 0,
+        status: 'completed'
+      }
+    }));
+    confetti({ particleCount: 150, spread: 90, origin: { y: 0.6 } });
+    addToast('achievement', 'VICTORY! The Query Devourer Shattered!', data.message || 'Phase 2 shattered with +400 XP distributed.');
+  });
+
+  useSocketEvent('study:room', (data: any) => {
+    if (data?.room) {
+      setStudyRooms((prev) => {
+        const idx = prev.findIndex((r) => r.id === data.room.id);
+        if (idx >= 0) {
+          const updated = [...prev];
+          updated[idx] = data.room;
+          return updated;
+        }
+        return [data.room, ...prev];
+      });
+    }
+  });
+
+  useSocketEvent('study:ended', (data: any) => {
+    if (data?.roomId) {
+      setStudyRooms((prev) => prev.filter((r) => r.id !== data.roomId));
+      if (activeStudyRoomId === data.roomId) {
+        setActiveStudyRoomId(null);
+      }
+      if (activeVoiceRoom?.id === data.roomId) {
+        setActiveVoiceRoom(null);
+      }
+      addToast('info', 'Study Chamber Ended', `"${data.roomName || 'Study Chamber'}" has ended and was removed.`);
+    }
+  });
+
+  useSocketEvent('study:participants', (data: any) => {
+    if (data?.roomId) {
+      setStudyRooms((prev) =>
+        prev.map((r) =>
+          r.id === data.roomId
+            ? {
+                ...r,
+                onlineCount: data.count ?? r.onlineCount,
+                activeMembers: data.participants ?? r.activeMembers
+              }
+            : r
+        )
+      );
+    }
+  });
+
+  useSocketEvent('study:timer', (data: any) => {
+    if (data?.roomId) {
+      setStudyRooms((prev) =>
+        prev.map((r) =>
+          r.id === data.roomId
+            ? {
+                ...r,
+                initialTimeSeconds: Math.ceil((data.pausedRemainingMs ?? data.durationMs ?? 1500000) / 1000)
+              }
+            : r
+        )
+      );
+    }
+  });
+
+  useSocketEvent('notification:new', (notif: AppNotification) => {
+    setNotifications((prev) => [notif, ...prev]);
+    if (notif.roomId) {
+      addToast(
+        'study',
+        notif.title,
+        notif.desc,
+        'Join Chamber',
+        () => {
+          setCurrentTab('study_rooms');
+          setActiveStudyRoomId(notif.roomId!);
+        }
+      );
+    } else {
+      addToast((notif.type as any) || 'info', notif.title, notif.desc);
+    }
+  });
+
+  useSocketEvent('chat:message', (data: any) => {
+    if (data?.channelId && data?.message) {
+      liveChatManager.handleSocketMessage(data.channelId, data.message);
+    } else if (data?.id && data?.text) {
+      const channelId = data.channelId || 'sql-joins';
+      liveChatManager.handleSocketMessage(channelId, data);
+    }
+  });
+
+  useSocketEvent('chat:reaction', (data: any) => {
+    if (data?.channelId && data?.messageId && data?.reactions) {
+      liveChatManager.handleSocketReaction(data.channelId, data.messageId, data.reactions);
+    }
+  });
 
   // Toast System
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
 
-  const addToast = (type: ToastMessage['type'], title: string, description?: string) => {
+  const addToast = (
+    type: ToastMessage['type'],
+    title: string,
+    description?: string,
+    actionText?: string,
+    onAction?: () => void
+  ) => {
     const id = `toast-${Date.now()}-${Math.random()}`;
-    setToasts((prev) => [...prev, { id, type, title, description }]);
+    setToasts((prev) => [...prev, { id, type, title, description, actionText, onAction }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
-    }, 4500);
+    }, actionText ? 8500 : 4500);
   };
 
   const removeToast = (id: string) => {
@@ -265,8 +746,12 @@ export const App: React.FC = () => {
     document.title = titles[currentTab] || 'GuildUp — Your party. Your quest. Your next level.';
   }, [currentTab, activeGuild.name, boss.name, studyRoom.name]);
 
-  // User XP progression helper
+  // User & Guild XP progression helper
   const awardUserXp = (amount: number, reason: string) => {
+    let newLevel = user.level;
+    let newCurrentXp = user.currentXp + amount;
+    let newMaxXp = user.maxXp;
+
     setUser((prev) => {
       const nextXp = prev.currentXp + amount;
       if (nextXp >= prev.maxXp) {
@@ -288,26 +773,88 @@ export const App: React.FC = () => {
           },
           ...n
         ]);
+        newLevel = prev.level + 1;
+        newCurrentXp = nextXp - prev.maxXp;
+        newMaxXp = Math.round(prev.maxXp * 1.25);
         return {
           ...prev,
-          level: prev.level + 1,
-          currentXp: nextXp - prev.maxXp,
-          maxXp: Math.round(prev.maxXp * 1.25)
+          level: newLevel,
+          currentXp: newCurrentXp,
+          maxXp: newMaxXp
         };
       } else {
         addToast('success', `+${amount} XP Earned`, reason);
+        newCurrentXp = nextXp;
         return { ...prev, currentXp: nextXp };
       }
     });
 
-    // Also contribute to Guild XP
-    setGuilds((prev) =>
-      prev.map((g) =>
-        g.id === selectedGuildId
-          ? { ...g, currentXp: Math.min(g.maxXp, g.currentXp + amount) }
-          : g
+    // 1. ALSO UPDATE THE USER'S ENTRY IN GUILD MEMBERS ROSTER
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.name.toLowerCase() === user.name.toLowerCase() || m.id === user.id
+          ? {
+              ...m,
+              level: newLevel,
+              currentXp: newCurrentXp,
+              maxXp: newMaxXp
+            }
+          : m
       )
     );
+
+    // 2. ALSO INCREASE GUILD XP & HANDLE GUILD LEVEL UP
+    setGuilds((prev) =>
+      prev.map((g) => {
+        if (g.id !== selectedGuildId) return g;
+        const nextGuildXp = g.currentXp + amount;
+        if (nextGuildXp >= g.maxXp) {
+          confetti({ particleCount: 110, spread: 75, origin: { y: 0.4 } });
+          addToast(
+            'achievement',
+            `GUILD LEVEL UP! ${g.name} Reached Level ${g.level + 1}!`,
+            `The guild gained +${amount} XP and elevated its sanctum mastery.`
+          );
+          setNotifications((n) => [
+            {
+              id: `notif-g-${Date.now()}`,
+              title: `GUILD ASCENSION: Level ${g.level + 1}!`,
+              desc: `${g.name} gained +${amount} XP and reached Guild Level ${g.level + 1}.`,
+              time: 'Just now',
+              unread: true,
+              type: 'party',
+              targetTab: 'guild_hall'
+            },
+            ...n
+          ]);
+          return {
+            ...g,
+            level: g.level + 1,
+            currentXp: nextGuildXp - g.maxXp,
+            maxXp: Math.round(g.maxXp * 1.3)
+          };
+        }
+        return {
+          ...g,
+          currentXp: nextGuildXp
+        };
+      })
+    );
+
+    // 3. LOG TO GUILD ACTIVITY FEED
+    setActivities((prev) => [
+      {
+        id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        userName: user.name,
+        userAvatarSeed: user.avatarSeed,
+        userAvatarColor: '#14b8a6',
+        actionText: 'earned',
+        target: `+${amount} XP (${reason})`,
+        timestamp: 'Just now',
+        type: 'quest'
+      },
+      ...prev.slice(0, 29)
+    ]);
   };
 
   // Guild Selection Handler
@@ -320,14 +867,45 @@ export const App: React.FC = () => {
   };
 
   // Create Guild Handler
-  const handleCreateGuild = (newGuild: Guild) => {
+  const handleCreateGuild = async (newGuild: Guild) => {
+    try {
+      const res = await api.guilds.createGuild({
+        name: newGuild.name,
+        tag: newGuild.tag,
+        description: newGuild.description,
+        icon: newGuild.emblemIcon,
+        accentColor: newGuild.emblemColor
+      });
+      if (res?.guild) {
+        setGuilds((prev) => [res.guild, ...prev]);
+        setSelectedGuildId(res.guild.id);
+        addToast('success', `Guild Founded: ${res.guild.name}!`, 'Your party is ready for new adventurers.');
+        return;
+      }
+    } catch {
+      // offline fallback
+    }
     setGuilds((prev) => [newGuild, ...prev]);
     setSelectedGuildId(newGuild.id);
     addToast('success', `Guild Founded: ${newGuild.name}!`, 'Your party is ready for new adventurers.');
   };
 
   // Join Guild by Code Handler
-  const handleJoinGuildCode = (code: string): boolean => {
+  const handleJoinGuildCode = async (code: string): Promise<boolean> => {
+    try {
+      const res = await api.guilds.joinGuild(code);
+      if (res?.guild) {
+        setGuilds((prev) => {
+          if (!prev.some((g) => g.id === res.guild.id)) return [...prev, res.guild];
+          return prev;
+        });
+        setSelectedGuildId(res.guild.id);
+        addToast('success', `Joined Guild: ${res.guild.name}!`, `Welcome to the ${res.guild.name} roster.`);
+        return true;
+      }
+    } catch {
+      // fallback to mock match
+    }
     const match = guilds.find(
       (g) => g.tag.toLowerCase() === code.toLowerCase() || g.name.toLowerCase().includes(code.toLowerCase())
     );
@@ -345,11 +923,17 @@ export const App: React.FC = () => {
     setIsQuestModalOpen(true);
   };
 
-  const handleToggleQuestStep = (questId: string, stepId: number) => {
+  const handleToggleQuestStep = async (questId: string, stepId: number) => {
+    const targetQuest = quests.find((q) => q.id === questId);
+    if (!targetQuest) return;
+
+    const targetStep = targetQuest.steps.find((s) => s.id === stepId);
+    const willBeCompleted = !targetStep?.completed;
+
     setQuests((prev) =>
       prev.map((q) => {
         if (q.id !== questId) return q;
-        const updatedSteps = q.steps.map((s) => (s.id === stepId ? { ...s, completed: !s.completed } : s));
+        const updatedSteps = q.steps.map((s) => (s.id === stepId ? { ...s, completed: willBeCompleted } : s));
         const completedCount = updatedSteps.filter((s) => s.completed).length;
         const isDone = completedCount === updatedSteps.length;
         return {
@@ -364,7 +948,7 @@ export const App: React.FC = () => {
     if (selectedQuest && selectedQuest.id === questId) {
       setSelectedQuest((prev) => {
         if (!prev) return null;
-        const updatedSteps = prev.steps.map((s) => (s.id === stepId ? { ...s, completed: !s.completed } : s));
+        const updatedSteps = prev.steps.map((s) => (s.id === stepId ? { ...s, completed: willBeCompleted } : s));
         const completedCount = updatedSteps.filter((s) => s.completed).length;
         return {
           ...prev,
@@ -375,21 +959,91 @@ export const App: React.FC = () => {
       });
     }
 
-    addToast('info', 'Quest Objective Updated');
+    if (willBeCompleted) {
+      // Completed a task/step from the quest!
+      const stepCount = Math.max(1, targetQuest.steps.length);
+      const stepXp = Math.max(35, Math.floor((targetQuest.rewardXp * 0.8) / stepCount));
+      const stepTitle = targetStep?.text
+        ? targetStep.text.length > 35
+          ? targetStep.text.slice(0, 35) + '...'
+          : targetStep.text
+        : 'Quest Directive';
+
+      // 1. Award XP to User Profile and Guild
+      awardUserXp(stepXp, `quest task: "${stepTitle}"`);
+
+      // 2. Check if all tasks in the quest are now finished
+      const remainingSteps = targetQuest.steps.filter((s) => s.id !== stepId && !s.completed);
+      if (remainingSteps.length === 0) {
+        const totalStepXp = stepXp * stepCount;
+        const remainderBonus = Math.max(30, targetQuest.rewardXp - totalStepXp);
+        awardUserXp(remainderBonus, `clearing all tasks in [${targetQuest.title}]`);
+        confetti({ particleCount: 130, spread: 85, origin: { y: 0.5 } });
+
+        setNotifications((n) => [
+          {
+            id: `notif-q-${Date.now()}`,
+            title: `Quest Conquered: ${targetQuest.title}`,
+            desc: `All ${stepCount} trial tasks cleared! +${targetQuest.rewardXp} total XP awarded to you and ${activeGuild.name}.`,
+            time: 'Just now',
+            unread: true,
+            type: 'quest',
+            targetTab: 'quests'
+          },
+          ...n
+        ]);
+
+        try {
+          await api.quests.completeQuest(questId);
+        } catch {}
+      }
+
+      // 3. Persist step to backend
+      try {
+        await api.quests.completeStep(questId, stepId);
+      } catch {
+        // offline fallback handled
+      }
+    } else {
+      addToast('info', 'Task Unchecked', `Step marked pending in ${targetQuest.title}`);
+    }
   };
 
-  const handleCompleteQuest = (quest: Quest) => {
+  const handleCompleteQuest = async (quest: Quest) => {
     setQuests((prev) =>
-      prev.map((q) => (q.id === quest.id ? { ...q, completed: true, progress: q.maxProgress } : q))
+      prev.map((q) =>
+        q.id === quest.id
+          ? {
+              ...q,
+              completed: true,
+              progress: q.maxProgress,
+              steps: q.steps.map((s) => ({ ...s, completed: true }))
+            }
+          : q
+      )
     );
 
-    awardUserXp(quest.rewardXp, `clearing ${quest.title}`);
+    if (selectedQuest && selectedQuest.id === quest.id) {
+      setSelectedQuest((prev) =>
+        prev
+          ? {
+              ...prev,
+              completed: true,
+              progress: prev.maxProgress,
+              steps: prev.steps.map((s) => ({ ...s, completed: true }))
+            }
+          : null
+      );
+    }
+
+    awardUserXp(quest.rewardXp, `clearing quest ${quest.title}`);
+    confetti({ particleCount: 150, spread: 80, origin: { y: 0.6 } });
 
     setNotifications((n) => [
       {
         id: `notif-q-${Date.now()}`,
-        title: `Quest Completed: ${quest.title}`,
-        desc: `Earned +${quest.rewardXp} XP and upgraded party mastery.`,
+        title: `Quest Mastered: ${quest.title}`,
+        desc: `Earned +${quest.rewardXp} XP for you and ${activeGuild.name}.`,
         time: 'Just now',
         unread: true,
         type: 'quest',
@@ -398,17 +1052,11 @@ export const App: React.FC = () => {
       ...n
     ]);
 
-    const newActivity: ActivityItem = {
-      id: `act-${Date.now()}`,
-      userName: user.name,
-      userAvatarSeed: user.avatarSeed,
-      userAvatarColor: user.avatarColor,
-      actionText: 'completed',
-      target: quest.title,
-      timestamp: 'Just now',
-      type: 'quest'
-    };
-    setActivities((prev) => [newActivity, ...prev]);
+    try {
+      await api.quests.completeQuest(quest.id);
+    } catch {
+      // offline fallback
+    }
   };
 
   // Boss Actions
@@ -451,6 +1099,56 @@ export const App: React.FC = () => {
   };
 
   // Render Central Content based on current navigation tab
+  const handleCreateRoom = async (newRoom: StudyRoom, invitedFriends?: string[]) => {
+    // 1. Optimistic local state update
+    setStudyRooms((prev) => [newRoom, ...prev]);
+    setActiveStudyRoomId(newRoom.id);
+    addToast(
+      'success',
+      `Study Chamber "${newRoom.name}" Founded!`,
+      invitedFriends && invitedFriends.length > 0
+        ? `Invites dispatched to ${invitedFriends.length} party scholar${invitedFriends.length > 1 ? 's' : ''}.`
+        : undefined
+    );
+
+    // 2. Broadcast room creation over Socket.IO to all devices
+    if (emit) {
+      emit('study:room', { action: 'created', room: newRoom });
+    }
+
+    // 3. Dispatch real-time invites to friends over Socket.IO
+    if (invitedFriends && invitedFriends.length > 0) {
+      invitedFriends.forEach((friendName) => {
+        const notif: AppNotification = {
+          id: `notif-invite-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          type: 'study',
+          title: 'Study Sanctuary Invite',
+          desc: `${user.name} invited you to join "${newRoom.name}" (${newRoom.topic})!`,
+          time: 'Just now',
+          unread: true,
+          roomId: newRoom.id,
+          roomName: newRoom.name
+        };
+        if (emit) {
+          emit('notification:send', notif);
+        }
+      });
+    }
+
+    // 4. Persist to backend database API
+    try {
+      await api.studyRooms.createRoom({
+        id: newRoom.id,
+        name: newRoom.name,
+        topic: newRoom.topic,
+        maxCapacity: newRoom.maxCapacity,
+        initialTimeSeconds: newRoom.initialTimeSeconds || 1500,
+        invitedMembers: invitedFriends,
+        inviterName: user.name
+      });
+    } catch {}
+  };
+
   const renderCentralWorkspace = () => {
     switch (currentTab) {
       case 'quests':
@@ -491,6 +1189,7 @@ export const App: React.FC = () => {
           <StudyRoomsView
             rooms={studyRooms}
             user={user}
+            members={members}
             activeRoomId={activeStudyRoomId}
             onSelectRoom={(roomId) => {
               setActiveStudyRoomId(roomId);
@@ -513,10 +1212,7 @@ export const App: React.FC = () => {
             onEndChamber={handleEndChamber}
             onOpenStudyChat={() => setCurrentTab('study_chat')}
             onRewardXp={(amt, reason) => awardUserXp(amt, reason)}
-            onCreateRoom={(newRoom) => {
-              setStudyRooms((prev) => [newRoom, ...prev]);
-              addToast('success', `Study Chamber "${newRoom.name}" Founded!`);
-            }}
+            onCreateRoom={handleCreateRoom}
           />
         );
 
@@ -583,6 +1279,16 @@ export const App: React.FC = () => {
     }
   };
 
+  // 1. FIRST SCREEN: If user is not logged in, render the dedicated Login Screen!
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen w-screen bg-[#070b13] text-slate-200 font-sans">
+        <LoginPage onLogin={handleLogin} isLoading={isLoggingIn} />
+        <ToastContainer toasts={toasts} onDismiss={removeToast} />
+      </div>
+    );
+  }
+
   // If user is inside a dedicated study room, render full-bleed immersive workspace
   const isDedicatedRoomMode = currentTab === 'study_rooms' && activeStudyRoomId !== null;
 
@@ -592,6 +1298,7 @@ export const App: React.FC = () => {
         <StudyRoomsView
           rooms={studyRooms}
           user={user}
+          members={members}
           activeRoomId={activeStudyRoomId}
           onSelectRoom={(roomId) => {
             setActiveStudyRoomId(roomId);
@@ -611,10 +1318,7 @@ export const App: React.FC = () => {
           onEndChamber={handleEndChamber}
           onOpenStudyChat={() => setCurrentTab('study_chat')}
           onRewardXp={(amt, reason) => awardUserXp(amt, reason)}
-          onCreateRoom={(newRoom) => {
-            setStudyRooms((prev) => [newRoom, ...prev]);
-            addToast('success', `Study Chamber "${newRoom.name}" Founded!`);
-          }}
+          onCreateRoom={handleCreateRoom}
         />
         {/* TOAST SYSTEM */}
         <ToastContainer toasts={toasts} onDismiss={removeToast} />
@@ -682,6 +1386,9 @@ export const App: React.FC = () => {
           onSearchChange={setSearchQuery}
           onOpenSettings={() => setCurrentTab('settings')}
           onOpenProfile={() => setIsProfileModalOpen(true)}
+          onOpenAuthModal={() => setIsAuthModalOpen(true)}
+          onLogout={handleLogout}
+          connectionStatus={status}
           onToggleMobileMenu={() => setIsMobileNavOpen(true)}
           onToggleMobileMembers={() => setIsMobileMembersOpen(true)}
           onNavigateHome={() => setCurrentTab('guild_hall')}
@@ -830,10 +1537,26 @@ export const App: React.FC = () => {
         user={user}
         isOpen={isProfileModalOpen}
         onClose={() => setIsProfileModalOpen(false)}
+        onSwitchScholar={() => {
+          setIsProfileModalOpen(false);
+          handleLogout();
+        }}
         onUpdateUser={(updated) => {
           setUser((prev) => ({ ...prev, ...updated }));
+          api.users.updateMe(updated).catch(() => {});
           addToast('success', 'Profile Updated Successfully');
         }}
+      />
+
+      {/* AUTHENTICATION & SCHOLAR LOGIN MODAL */}
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        onClose={() => setIsAuthModalOpen(false)}
+        onSuccess={(newUser) => {
+          setUser(newUser);
+          setIsAuthModalOpen(false);
+        }}
+        onShowToast={addToast}
       />
 
       {/* 4. FLOATING VOICE CHAT ROOM WINDOW (BOTTOM RIGHT CORNER) */}

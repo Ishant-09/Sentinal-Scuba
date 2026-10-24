@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { GuildMember, UserProfile } from '../../types';
 import { Avatar } from '../common/Avatar';
+import { api } from '../../api/client';
+import { useSocketEvent } from '../../realtime/socket';
 
 export interface WhisperMessage {
   id: string;
@@ -161,9 +163,33 @@ export const WhisperModal: React.FC<WhisperModalProps> = ({
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
+  useSocketEvent('whisper:new', (data: any) => {
+    if (member && (data.senderId === member.id || data.recipientId === member.id)) {
+      const isFromMe = data.senderId === currentUser.id;
+      const incoming: WhisperMessage = {
+        id: data.id || `w-${Date.now()}`,
+        senderId: isFromMe ? 'user' : 'member',
+        senderName: isFromMe ? currentUser.name : member.name,
+        text: data.text,
+        timestamp: new Date(data.createdAt || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        read: true
+      };
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === incoming.id)) return prev;
+        return [...prev, incoming];
+      });
+    }
+  });
+
+  useSocketEvent('whisper:typing', (data: any) => {
+    if (member && data.senderId === member.id) {
+      setIsTyping(Boolean(data.isTyping));
+    }
+  });
+
   if (!isOpen || !member) return null;
 
-  const handleSendMessage = (textToSend?: string) => {
+  const handleSendMessage = async (textToSend?: string) => {
     const content = (textToSend || inputText).trim();
     if (!content) return;
 
@@ -182,15 +208,20 @@ export const WhisperModal: React.FC<WhisperModalProps> = ({
     setInputText('');
     setShowEmojiPicker(false);
 
-    // Simulate smart, character-specific reply after delay
-    setTimeout(() => {
-      setIsTyping(true);
-    }, 400);
+    try {
+      await api.whispers.sendWhisper(member.id, content);
+      return;
+    } catch {
+      // Offline fallback: simulate smart character reply
+      setTimeout(() => {
+        setIsTyping(true);
+      }, 400);
 
-    setTimeout(() => {
-      setIsTyping(false);
-      generateMemberReply(content, timeStr);
-    }, 1400);
+      setTimeout(() => {
+        setIsTyping(false);
+        generateMemberReply(content, timeStr);
+      }, 1400);
+    }
   };
 
   const generateMemberReply = (userQuery: string, timeStr: string) => {

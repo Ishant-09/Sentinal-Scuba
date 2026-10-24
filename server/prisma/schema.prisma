@@ -1,0 +1,566 @@
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [pg_trgm]
+}
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+enum ThemeMode {
+  DARK
+  LIGHT
+}
+
+enum GuildRole {
+  OWNER
+  OFFICER
+  SCHOLAR
+}
+
+enum FriendshipStatus {
+  PENDING
+  ACCEPTED
+  BLOCKED
+}
+
+enum QuestDifficulty {
+  COMMON
+  RARE
+  EPIC
+  LEGENDARY
+}
+
+enum QuestProgressStatus {
+  IN_PROGRESS
+  COMPLETED
+}
+
+enum XpSource {
+  QUEST_STEP
+  QUEST_COMPLETE
+  BOSS_DAMAGE
+  BOSS_VICTORY
+  ACHIEVEMENT
+  MINIGAME
+  CHALLENGE
+  STUDY_TIME
+}
+
+enum ChannelScope {
+  GUILD
+  ROOM
+}
+
+enum BossStatus {
+  ACTIVE
+  DEFEATED
+}
+
+enum AchievementTier {
+  BRONZE
+  SILVER
+  GOLD
+  MYTHIC
+}
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  passwordHash    String
+  name            String
+  handle          String    @unique
+  roleClass       String    @default("Scholar")
+  bio             String?   @default("Aspiring Scholar of the Grand Guild")
+  level           Int       @default(1)
+  currentXp       Int       @default(0)
+  maxXp           Int       @default(500)
+  totalXp         Int       @default(0)
+  dailyStreak     Int       @default(1)
+  longestStreak   Int       @default(1)
+  lastActiveDate  String?
+  masteryScore    Int       @default(0)
+  avatarSeed      String    @default("scholar")
+  avatarColor     String    @default("#14b8a6")
+  timezone        String    @default("UTC")
+  lastSeenAt      DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  settings        UserSettings?
+  refreshTokens   RefreshToken[]
+  guildMemberships GuildMember[]
+  createdGuilds   Guild[]           @relation("GuildCreator")
+  friendshipsInitiated Friendship[] @relation("FriendshipInitiator")
+  friendshipsReceived  Friendship[] @relation("FriendshipReceiver")
+  questProgress   UserQuestProgress[]
+  xpEvents        XpEvent[]
+  studySessions   StudySession[]
+  ownedRooms      StudyRoom[]       @relation("RoomOwner")
+  roomParticipations StudyParticipant[]
+  whiteboardStrokes WhiteboardStroke[]
+  chatMessages    ChatMessage[]     @relation("MessageAuthor")
+  reactions       MessageReaction[]
+  channelReads    ChannelRead[]
+  whispersSent    Whisper[]         @relation("WhisperSender")
+  whispersReceived Whisper[]        @relation("WhisperRecipient")
+  bossRaidLogs    BossRaidLog[]
+  achievements    UserAchievement[]
+  notifications   Notification[]
+  activityEvents  ActivityEvent[]   @relation("ActivityActor")
+  hintAttempts    HintAttempt[]
+  minigameScores  MinigameScore[]
+
+  @@index([createdAt(sort: Desc)])
+  @@map("users")
+}
+
+model UserSettings {
+  userId             String    @id
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme              ThemeMode @default(DARK)
+  soundEnabled       Boolean   @default(true)
+  volume             Int       @default(80)
+  chimeEnabled       Boolean   @default(true)
+  weeklyGoalMinutes  Int       @default(600)
+  recentSearches     Json      @default("[]")
+  notificationPrefs  Json      @default("{\"sound\":true,\"study\":true,\"boss\":true,\"quests\":true}")
+
+  @@map("user_settings")
+}
+
+model RefreshToken {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash   String
+  deviceLabel String    @default("Web Client")
+  userAgent   String?
+  ip          String?
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@map("refresh_tokens")
+}
+
+model Guild {
+  id          String        @id @default(uuid())
+  name        String
+  tag         String        @unique
+  description String
+  level       Int           @default(1)
+  currentXp   Int           @default(0)
+  maxXp       Int           @default(3000)
+  emblemIcon  String        @default("shield")
+  emblemColor String        @default("#14b8a6")
+  inviteCode  String        @unique
+  createdBy   String
+  creator     User          @relation("GuildCreator", fields: [createdBy], references: [id])
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  members     GuildMember[]
+  rooms       StudyRoom[]
+  channels    ChatChannel[]
+  bossEncounters BossEncounter[]
+  activityEvents ActivityEvent[]
+  xpEvents    XpEvent[]
+
+  @@index([createdAt(sort: Desc)])
+  @@map("guilds")
+}
+
+model GuildMember {
+  guildId   String
+  guild     Guild     @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      GuildRole @default(SCHOLAR)
+  joinedAt  DateTime  @default(now())
+
+  @@id([guildId, userId])
+  @@index([guildId, joinedAt(sort: Desc)])
+  @@index([userId])
+  @@map("guild_members")
+}
+
+model Friendship {
+  id        String           @id @default(uuid())
+  userId    String
+  user      User             @relation("FriendshipInitiator", fields: [userId], references: [id], onDelete: Cascade)
+  friendId  String
+  friend    User             @relation("FriendshipReceiver", fields: [friendId], references: [id], onDelete: Cascade)
+  status    FriendshipStatus @default(PENDING)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  @@unique([userId, friendId])
+  @@index([userId, status])
+  @@index([friendId, status])
+  @@map("friendships")
+}
+
+model Quest {
+  id          String          @id
+  category    String          // Python, Git, Maths, Programming
+  title       String
+  description String
+  difficulty  QuestDifficulty
+  rewardXp    Int
+  duration    String          @default("25 min")
+  objective   String          @default("Complete the mission criteria")
+  steps       Json            // [{ id: 1, text: "Configure env", completed: false }]
+  position    Int             @default(0)
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  userProgress UserQuestProgress[]
+  hintChallenges HintChallenge[]
+
+  @@index([category, position])
+  @@map("quests")
+}
+
+model UserQuestProgress {
+  id             String              @id @default(uuid())
+  userId         String
+  user           User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  questId        String
+  quest          Quest               @relation(fields: [questId], references: [id], onDelete: Cascade)
+  completedSteps Int[]               @default([])
+  status         QuestProgressStatus @default(IN_PROGRESS)
+  startedAt      DateTime            @default(now())
+  completedAt    DateTime?
+
+  @@unique([userId, questId])
+  @@index([userId, status])
+  @@map("user_quest_progress")
+}
+
+model XpEvent {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  guildId   String?
+  guild     Guild?   @relation(fields: [guildId], references: [id], onDelete: SetNull)
+  source    XpSource
+  sourceRef String
+  amount    Int
+  createdAt DateTime @default(now())
+
+  @@unique([userId, source, sourceRef])
+  @@index([guildId, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("xp_events")
+}
+
+model StudySession {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roomId    String?
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+  minutes   Int       @default(0)
+
+  @@index([userId, startedAt(sort: Desc)])
+  @@map("study_sessions")
+}
+
+model StudyRoom {
+  id            String             @id @default(uuid())
+  guildId       String
+  guild         Guild              @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  name          String
+  topic         String
+  maxCapacity   Int                @default(12)
+  isLive        Boolean            @default(true)
+  ownerId       String
+  owner         User               @relation("RoomOwner", fields: [ownerId], references: [id])
+  timerState    Json               @default("{\"mode\":\"FOCUS\",\"startedAt\":null,\"durationMs\":1500000,\"pausedRemainingMs\":1500000,\"cycle\":1}")
+  notesSnapshot String?            @default("")
+  endedAt       DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  participants  StudyParticipant[]
+  strokes       WhiteboardStroke[]
+  channels      ChatChannel[]
+  minigameScores MinigameScore[]
+
+  @@index([guildId, isLive])
+  @@map("study_rooms")
+}
+
+model StudyParticipant {
+  id                String    @id @default(uuid())
+  roomId            String
+  room              StudyRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  joinedAt          DateTime  @default(now())
+  leftAt            DateTime?
+  isVoiceConnected  Boolean   @default(false)
+  isMuted           Boolean   @default(false)
+  isDeafened        Boolean   @default(false)
+  isScreenSharing   Boolean   @default(false)
+
+  @@index([roomId, leftAt])
+  @@index([userId])
+  @@map("study_participants")
+}
+
+model WhiteboardStroke {
+  id        String    @id @default(uuid())
+  roomId    String
+  room      StudyRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  data      Json
+  createdAt DateTime  @default(now())
+
+  @@index([roomId, createdAt])
+  @@map("whiteboard_strokes")
+}
+
+model ChatChannel {
+  id          String        @id @default(uuid())
+  scope       ChannelScope  @default(GUILD)
+  guildId     String?
+  guild       Guild?        @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  roomId      String?
+  room        StudyRoom?    @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  slug        String
+  name        String
+  description String?
+  position    Int           @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  messages    ChatMessage[]
+  reads       ChannelRead[]
+
+  @@unique([guildId, slug])
+  @@index([guildId, position])
+  @@index([roomId])
+  @@map("chat_channels")
+}
+
+model ChatMessage {
+  id            String            @id // ULID
+  channelId     String
+  channel       ChatChannel       @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  senderId      String
+  sender        User              @relation("MessageAuthor", fields: [senderId], references: [id], onDelete: Cascade)
+  text          String
+  codeSnippet   String?
+  codeLanguage  String?           @default("sql")
+  clientMsgId   String?
+  replyToId     String?
+  editedAt      DateTime?
+  deletedAt     DateTime?
+  createdAt     DateTime          @default(now())
+
+  reactions     MessageReaction[]
+
+  @@index([channelId, createdAt(sort: Desc)])
+  @@index([senderId, clientMsgId])
+  @@map("chat_messages")
+}
+
+model MessageReaction {
+  id        String      @id @default(uuid())
+  messageId String
+  message   ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  emoji     String
+  createdAt DateTime    @default(now())
+
+  @@unique([messageId, userId, emoji])
+  @@index([messageId])
+  @@map("message_reactions")
+}
+
+model ChannelRead {
+  id                 String      @id @default(uuid())
+  channelId          String
+  channel            ChatChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  userId             String
+  user               User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastReadMessageId  String
+  updatedAt          DateTime    @updatedAt
+
+  @@unique([channelId, userId])
+  @@map("channel_reads")
+}
+
+model Whisper {
+  id          String    @id // ULID
+  senderId    String
+  sender      User      @relation("WhisperSender", fields: [senderId], references: [id], onDelete: Cascade)
+  recipientId String
+  recipient   User      @relation("WhisperRecipient", fields: [recipientId], references: [id], onDelete: Cascade)
+  text        String
+  clientMsgId String?
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([senderId, recipientId, createdAt(sort: Desc)])
+  @@index([recipientId, readAt])
+  @@map("whispers")
+}
+
+model BossEncounter {
+  id           String        @id @default(uuid())
+  guildId      String
+  guild        Guild         @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  name         String
+  subtitle     String        @default("An ancient corrupted relational entity")
+  difficulty   String        @default("LEGENDARY")
+  element      String        @default("Void / Latency")
+  lore         String        @default("Spawned from an unindexed trillion-row join disaster")
+  phaseCount   Int           @default(3)
+  currentPhase Int           @default(2)
+  currentHp    Int           @default(6400)
+  maxHp        Int           @default(20000)
+  status       BossStatus    @default(ACTIVE)
+  phases       Json          // Array of { number, name, status, bossHp, bossMaxHp }
+  startedAt    DateTime      @default(now())
+  defeatedAt   DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+
+  raidLogs     BossRaidLog[]
+
+  @@index([guildId, status])
+  @@map("boss_encounters")
+}
+
+model BossRaidLog {
+  id         String        @id @default(uuid())
+  bossId     String
+  boss       BossEncounter @relation(fields: [bossId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action     String
+  damage     Int
+  phaseAtHit Int
+  isCrit     Boolean       @default(false)
+  message    String
+  createdAt  DateTime      @default(now())
+
+  @@index([bossId, createdAt(sort: Desc)])
+  @@index([userId])
+  @@map("boss_raid_logs")
+}
+
+model Achievement {
+  id          String            @id
+  key         String            @unique
+  tier        AchievementTier   @default(BRONZE)
+  title       String
+  description String
+  category    String            @default("Quest")
+  rewardXp    Int               @default(100)
+  criteria    Json              // { type: "QUEST_COUNT", target: 5 }
+  icon        String            @default("trophy")
+
+  userAchievements UserAchievement[]
+
+  @@map("achievements")
+}
+
+model UserAchievement {
+  id            String      @id @default(uuid())
+  userId        String
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievementId String
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+  progress      Int         @default(0)
+  unlockedAt    DateTime?
+
+  @@unique([userId, achievementId])
+  @@index([userId, unlockedAt])
+  @@map("user_achievements")
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String   // boss, study, streak, quest, achievement, party
+  title     String
+  body      String
+  data      Json?
+  readAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, readAt, createdAt(sort: Desc)])
+  @@map("notifications")
+}
+
+model ActivityEvent {
+  id        String   @id @default(uuid())
+  guildId   String
+  guild     Guild    @relation(fields: [guildId], references: [id], onDelete: Cascade)
+  actorId   String
+  actor     User     @relation("ActivityActor", fields: [actorId], references: [id], onDelete: Cascade)
+  type      String   // quest, level, achievement, study, boss
+  text      String
+  data      Json?
+  createdAt DateTime @default(now())
+
+  @@index([guildId, createdAt(sort: Desc)])
+  @@map("activity_events")
+}
+
+model HintChallenge {
+  id           String        @id @default(uuid())
+  questId      String
+  quest        Quest         @relation(fields: [questId], references: [id], onDelete: Cascade)
+  prompt       String
+  options      Json          // string[]
+  correctIndex Int
+  hint         String
+  xp           Int           @default(50)
+
+  attempts     HintAttempt[]
+
+  @@index([questId])
+  @@map("hint_challenges")
+}
+
+model HintAttempt {
+  id            String        @id @default(uuid())
+  userId        String
+  user          User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challengeId   String
+  challenge     HintChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+  selectedIndex Int
+  correct       Boolean
+  createdAt     DateTime      @default(now())
+
+  @@index([userId, challengeId])
+  @@map("hint_attempts")
+}
+
+model MinigameScore {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  roomId    String?
+  room      StudyRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  game      String    // sql_blitz, memory_grid
+  score     Int
+  createdAt DateTime  @default(now())
+
+  @@index([game, score(sort: Desc)])
+  @@index([userId])
+  @@map("minigame_scores")
+}

@@ -27,7 +27,8 @@ import {
   Trophy,
   MessageSquare,
   CornerDownLeft,
-  ExternalLink
+  ExternalLink,
+  LogOut
 } from 'lucide-react';
 import { UserProfile, AppNotification, NavigationItem } from '../../types';
 import { Avatar } from '../common/Avatar';
@@ -38,6 +39,9 @@ interface TopNavbarProps {
   onSearchChange: (query: string) => void;
   onOpenSettings: () => void;
   onOpenProfile: () => void;
+  onOpenAuthModal?: () => void;
+  onLogout?: () => void;
+  connectionStatus?: 'connected' | 'connecting' | 'disconnected';
   onToggleMobileMenu: () => void;
   onToggleMobileMembers: () => void;
   onNavigateHome: () => void;
@@ -72,6 +76,9 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   onSearchChange,
   onOpenSettings,
   onOpenProfile,
+  onOpenAuthModal,
+  onLogout,
+  connectionStatus = 'connected',
   onToggleMobileMenu,
   onToggleMobileMembers,
   onNavigateHome,
@@ -630,6 +637,31 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
 
       {/* Right Action Icons & Profile */}
       <div className="flex items-center gap-1.5 sm:gap-2.5">
+        {/* Real-time Connection Status Indicator */}
+        <div
+          className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-mono border ${
+            connectionStatus === 'connected'
+              ? 'bg-teal-950/60 border-teal-700/60 text-teal-300'
+              : connectionStatus === 'connecting'
+              ? 'bg-amber-950/60 border-amber-700/60 text-amber-300'
+              : 'bg-rose-950/60 border-rose-700/60 text-rose-300'
+          }`}
+          title={`Backend Real-Time State: ${connectionStatus}`}
+        >
+          <span
+            className={`w-1.5 h-1.5 rounded-full ${
+              connectionStatus === 'connected'
+                ? 'bg-teal-400 animate-pulse'
+                : connectionStatus === 'connecting'
+                ? 'bg-amber-400 animate-ping'
+                : 'bg-rose-400'
+            }`}
+          />
+          <span className="hidden sm:inline">
+            {connectionStatus === 'connected' ? 'Live' : connectionStatus === 'connecting' ? 'Connecting...' : 'Offline'}
+          </span>
+        </div>
+
         {/* Streak chip */}
         <div className="hidden md:flex items-center gap-1 px-2.5 py-1 rounded bg-[#111724] border border-[#1a2333] text-[11px] font-mono text-amber-300/90">
           <Flame className="w-3.5 h-3.5 text-amber-400" />
@@ -842,6 +874,18 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
             <div className="text-[10px] font-mono text-teal-400 leading-none">Lv. {user.level}</div>
           </div>
         </button>
+
+        {/* Quick Logout / Switch Scholar Button */}
+        {onLogout && (
+          <button
+            onClick={onLogout}
+            className="p-1.5 sm:p-2 rounded-inner text-slate-400 hover:text-rose-400 hover:bg-[#1e1218] transition-colors"
+            title="Log Out / Switch Scholar"
+            aria-label="Log Out"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        )}
       </div>
     </header>
   );

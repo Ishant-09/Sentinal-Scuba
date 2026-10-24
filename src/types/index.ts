@@ -90,6 +90,7 @@ export interface BossEncounter {
 }
 
 export interface UserProfile {
+  id?: string;
   name: string;
   roleClass: string;
   level: number;
@@ -100,6 +101,8 @@ export interface UserProfile {
   masteryScore: number;
   avatarSeed: string;
   avatarColor: string;
+  handle?: string;
+  email?: string;
 }
 
 export interface StudyRoom {
@@ -130,6 +133,8 @@ export interface AppNotification {
   unread: boolean;
   type: 'boss' | 'study' | 'streak' | 'quest' | 'achievement' | 'party';
   targetTab?: NavigationItem;
+  roomId?: string;
+  roomName?: string;
 }
 
 export interface Achievement {
@@ -173,4 +178,22 @@ export interface LeaderboardEntry {
   questsCompleted: number;
   streakDays: number;
   isCurrentUser?: boolean;
+}
+
+export interface ChatReaction {
+  emoji: string;
+  count: number;
+  users: string[];
+}
+
+export interface ChatMessage {
+  id: string;
+  senderName: string;
+  senderAvatar: string;
+  senderRole: string;
+  timestamp: string;
+  text: string;
+  codeSnippet?: string;
+  reactions: ChatReaction[];
+  deviceId?: string;
 }

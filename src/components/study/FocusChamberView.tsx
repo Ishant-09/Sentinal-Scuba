@@ -19,12 +19,15 @@ import {
 import { StudyRoom, UserProfile } from '../../types';
 import { Avatar } from '../common/Avatar';
 import confetti from 'canvas-confetti';
+import { useSocket, useSocketEvent } from '../../realtime/socket';
+import { api } from '../../api/client';
 
 export const FocusChamberView: React.FC<{
   studyRoom: StudyRoom;
   user: UserProfile;
   onRewardXp?: (amt: number, r: string) => void;
 }> = ({ studyRoom, user, onRewardXp }) => {
+  const { emit } = useSocket();
   const [sessionMode, setSessionMode] = useState<25 | 50 | 15>(25);
   const [timerSeconds, setTimerSeconds] = useState(25 * 60);
   const [isRunning, setIsRunning] = useState(false);
@@ -37,20 +40,106 @@ export const FocusChamberView: React.FC<{
   const audioCtxRef = useRef<AudioContext | null>(null);
   const noiseNodeRef = useRef<AudioNode | null>(null);
 
-  // Timer Tick
+  const isTargetRoom = (incomingRoomId?: string) => {
+    if (!incomingRoomId) return true;
+    if (incomingRoomId === studyRoom.id) return true;
+    const normIn = incomingRoomId.toLowerCase();
+    const normCur = (studyRoom.id || '').toLowerCase();
+    if (normIn.includes('sanctuary') && normCur.includes('sanctuary')) return true;
+    if (normIn.includes('algo') && normCur.includes('algo')) return true;
+    if (normIn.includes('system') && normCur.includes('system')) return true;
+    if (normIn.includes('math') && normCur.includes('math')) return true;
+    return false;
+  };
+
+  // Helper to apply incoming server timer state to local state
+  const applyServerTimerState = (state: any) => {
+    if (!state) return;
+    const durationMins = Math.round((state.durationMs || 1500000) / (60 * 1000));
+    if (durationMins === 50 || durationMins === 15) {
+      setSessionMode(durationMins);
+    } else {
+      setSessionMode(25);
+    }
+
+    const running = !state.paused && !!state.startedAt;
+    setIsRunning(running);
+
+    if (!running) {
+      const remainingSecs = Math.max(0, Math.ceil((state.pausedRemainingMs ?? state.durationMs ?? 1500000) / 1000));
+      setTimerSeconds(remainingSecs);
+    } else {
+      const elapsedMs = Math.max(0, Date.now() - state.startedAt);
+      const remainingSecs = Math.max(0, Math.ceil(((state.pausedRemainingMs ?? state.durationMs) - elapsedMs) / 1000));
+      setTimerSeconds(remainingSecs);
+    }
+  };
+
+  // 1. Listen for real-time timer sync events over Socket.IO
+  useSocketEvent('study:timer', (data: any) => {
+    if (!data) return;
+    if (isTargetRoom(data.roomId)) {
+      applyServerTimerState(data);
+    }
+  });
+
+  // 2. BroadcastChannel for instant local cross-tab / cross-window sync
+  useEffect(() => {
+    let bc: BroadcastChannel | null = null;
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        bc = new BroadcastChannel('guildup_pomodoro_sync');
+        bc.onmessage = (event) => {
+          if (event.data && isTargetRoom(event.data.roomId)) {
+            applyServerTimerState(event.data);
+          }
+        };
+      }
+    } catch {}
+
+    return () => {
+      try {
+        bc?.close();
+      } catch {}
+    };
+  }, [studyRoom.id]);
+
+  // 3. Fetch initial authoritative timer state on mount & join room
+  useEffect(() => {
+    if (emit) {
+      emit('study:join', { roomId: studyRoom.id });
+      emit('study:get_timer', { roomId: studyRoom.id }, (res: any) => {
+        if (res?.timerState) {
+          applyServerTimerState(res.timerState);
+        }
+      });
+    }
+
+    api.studyRooms.getTimer(studyRoom.id).then((res) => {
+      if (res?.timerState) {
+        applyServerTimerState(res.timerState);
+      }
+    }).catch(() => {});
+  }, [studyRoom.id, emit]);
+
+  // Timer Local Tick
   useEffect(() => {
     let interval: any = null;
-    if (isRunning && timerSeconds > 0) {
+    if (isRunning) {
       interval = setInterval(() => {
-        setTimerSeconds((prev) => prev - 1);
+        setTimerSeconds((prev) => {
+          if (prev <= 1) {
+            setIsRunning(false);
+            confetti({ particleCount: 120, spread: 80 });
+            onRewardXp?.(150, `Completing a ${sessionMode}-minute deep focus study block`);
+            return 0;
+          }
+          return prev - 1;
+        });
       }, 1000);
-    } else if (timerSeconds === 0 && isRunning) {
-      setIsRunning(false);
-      confetti({ particleCount: 120, spread: 80 });
-      onRewardXp?.(150, `Completing a ${sessionMode}-minute deep focus study block`);
     }
     return () => clearInterval(interval);
-  }, [isRunning, timerSeconds, sessionMode]);
+  }, [isRunning, sessionMode, onRewardXp]);
 
   // Audio synthesis for ambient soundscapes
   useEffect(() => {
@@ -116,10 +205,64 @@ export const FocusChamberView: React.FC<{
     }
   }, [ambientSound, ambientVolume]);
 
+  const sendTimerAction = (action: 'start' | 'pause' | 'resume' | 'reset' | 'setMode', mins?: number) => {
+    const targetMins = mins || sessionMode;
+    const targetMs = targetMins * 60 * 1000;
+    const now = Date.now();
+
+    // 1. Optimistic local update for instantaneous UI responsiveness
+    if (action === 'start' || action === 'resume') {
+      setIsRunning(true);
+    } else if (action === 'pause') {
+      setIsRunning(false);
+    } else if (action === 'reset') {
+      setIsRunning(false);
+      setTimerSeconds(targetMins * 60);
+    } else if (action === 'setMode') {
+      const newMins = (mins || 25) as 25 | 50 | 15;
+      setSessionMode(newMins);
+      setIsRunning(false);
+      setTimerSeconds(newMins * 60);
+    }
+
+    // 2. BroadcastChannel for instant local cross-tab / cross-window sync
+    try {
+      if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
+        const bc = new BroadcastChannel('guildup_pomodoro_sync');
+        bc.postMessage({
+          roomId: studyRoom.id,
+          action,
+          mode: targetMins === 15 ? 'BREAK' : 'FOCUS',
+          durationMs: targetMs,
+          pausedRemainingMs:
+            action === 'setMode' || action === 'reset'
+              ? targetMs
+              : action === 'pause'
+              ? timerSeconds * 1000
+              : targetMs,
+          startedAt: action === 'start' || action === 'resume' ? now : null,
+          paused: action !== 'start' && action !== 'resume',
+          serverNow: now
+        });
+        bc.close();
+      }
+    } catch {}
+
+    // 3. Instant zero-latency socket broadcast to sync all connected network devices
+    if (emit) {
+      emit('study:timer', {
+        roomId: studyRoom.id,
+        action,
+        durationMinutes: targetMins
+      });
+    }
+
+    // 4. HTTP API persistence
+    api.studyRooms.updateTimer(studyRoom.id, action, targetMins).catch(() => {});
+  };
+
   const handleSelectMode = (mins: 25 | 50 | 15) => {
-    setSessionMode(mins);
-    setIsRunning(false);
-    setTimerSeconds(mins * 60);
+    sendTimerAction('setMode', mins);
   };
 
   const formatTime = (secs: number) => {
@@ -190,17 +333,14 @@ export const FocusChamberView: React.FC<{
           {/* Controls */}
           <div className="flex items-center justify-center gap-3">
             <button
-              onClick={() => setIsRunning(!isRunning)}
+              onClick={() => sendTimerAction(isRunning ? 'pause' : 'start')}
               className="flex items-center gap-2 px-6 py-2.5 rounded-inner bg-teal-500 hover:bg-teal-400 text-[#070b13] font-bold text-xs tracking-wide transition-all shadow-md active:scale-95"
             >
               {isRunning ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 fill-current" />}
               <span>{isRunning ? 'Pause Flow' : 'Begin Focus Session'}</span>
             </button>
             <button
-              onClick={() => {
-                setIsRunning(false);
-                setTimerSeconds(sessionMode * 60);
-              }}
+              onClick={() => sendTimerAction('reset', sessionMode)}
               className="p-2.5 rounded-inner bg-[#121824] hover:bg-[#1a2333] border border-[#1b2538] text-slate-400 hover:text-white transition-colors"
               title="Reset Timer"
             >

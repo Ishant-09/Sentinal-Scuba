@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: guildup-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: guildup
+      POSTGRES_PASSWORD: guildup_password
+      POSTGRES_DB: guildup_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U guildup -d guildup_db']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: guildup-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  livekit:
+    image: livekit/livekit-server:v1.6
+    container_name: guildup-livekit
+    restart: unless-stopped
+    command: --dev --bind 0.0.0.0
+    ports:
+      - '7880:7880'
+      - '7881:7881'
+      - '7882:7882/udp'
+    environment:
+      - LIVEKIT_KEYS=devkey: secretdevkey12345678901234567890
+
+  server:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: guildup-backend
+    restart: unless-stopped
+    ports:
+      - '4000:4000'
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      HOST: '0.0.0.0'
+      DATABASE_URL: postgresql://guildup:guildup_password@postgres:5432/guildup_db?schema=public
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: dev_super_secret_jwt_access_token_key_change_in_prod_12345
+      REFRESH_SECRET: dev_super_secret_jwt_refresh_token_key_change_in_prod_67890
+      CORS_ORIGINS: http://localhost:3000,http://localhost:3001,http://127.0.0.1:3000
+      LIVEKIT_URL: http://livekit:7880
+      LIVEKIT_API_KEY: devkey
+      LIVEKIT_API_SECRET: secretdevkey12345678901234567890
+      ASTRA_LLM_ENABLED: 'false'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:

@@ -22,13 +22,15 @@ interface UserProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
   onUpdateUser: (updated: Partial<UserProfile>) => void;
+  onSwitchScholar?: () => void;
 }
 
 export const UserProfileModal: React.FC<UserProfileModalProps> = ({
   user,
   isOpen,
   onClose,
-  onUpdateUser
+  onUpdateUser,
+  onSwitchScholar
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [name, setName] = useState(user.name);
@@ -228,12 +230,24 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({
             <span>{isEditing ? 'Cancel Edit' : 'Edit Profile'}</span>
           </button>
 
-          <button
-            onClick={onClose}
-            className="px-4 py-1.5 rounded-inner bg-[#141d2c] hover:bg-[#1a2638] text-slate-200 border border-[#202b3d] text-xs font-semibold transition-colors"
-          >
-            Close
-          </button>
+          <div className="flex items-center gap-3">
+            {onSwitchScholar && (
+              <button
+                type="button"
+                onClick={onSwitchScholar}
+                className="text-xs text-teal-400 hover:text-teal-300 font-medium transition-colors"
+              >
+                Switch Scholar / Login
+              </button>
+            )}
+
+            <button
+              onClick={onClose}
+              className="px-4 py-1.5 rounded-inner bg-[#141d2c] hover:bg-[#1a2638] text-slate-200 border border-[#202b3d] text-xs font-semibold transition-colors"
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>

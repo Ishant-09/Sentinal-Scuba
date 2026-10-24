@@ -14,27 +14,32 @@ import {
   Search,
   CheckCircle2,
   Clock,
-  PhoneOff
+  PhoneOff,
+  UserPlus,
+  Copy,
+  Check
 } from 'lucide-react';
-import { StudyRoom, UserProfile } from '../../types';
+import { StudyRoom, UserProfile, GuildMember } from '../../types';
 import { Avatar } from '../common/Avatar';
 import { DedicatedStudyRoomView } from '../study/DedicatedStudyRoomView';
 
 interface StudyRoomsViewProps {
   rooms: StudyRoom[];
   user: UserProfile;
+  members?: GuildMember[];
   activeRoomId?: string | null;
   onSelectRoom: (roomId: string) => void;
   onLeaveRoom: () => void;
   onEndChamber?: (roomId: string) => void;
   onOpenStudyChat?: () => void;
   onRewardXp?: (amount: number, reason: string) => void;
-  onCreateRoom?: (newRoom: StudyRoom) => void;
+  onCreateRoom?: (newRoom: StudyRoom, invitedFriends?: string[]) => void;
 }
 
 export const StudyRoomsView: React.FC<StudyRoomsViewProps> = ({
   rooms,
   user,
+  members = [],
   activeRoomId,
   onSelectRoom,
   onLeaveRoom,
@@ -48,6 +53,9 @@ export const StudyRoomsView: React.FC<StudyRoomsViewProps> = ({
   const [newRoomName, setNewRoomName] = useState('');
   const [newRoomTopic, setNewRoomTopic] = useState('');
   const [newRoomCapacity, setNewRoomCapacity] = useState(6);
+  const [selectedInvites, setSelectedInvites] = useState<string[]>([]);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [pendingRoomId, setPendingRoomId] = useState<string>(() => `room-${Date.now().toString(36)}`);
 
   // If a room is currently active, render the dedicated room view with its own navigation
   const activeRoom = rooms.find((r) => r.id === activeRoomId);
@@ -57,6 +65,7 @@ export const StudyRoomsView: React.FC<StudyRoomsViewProps> = ({
       <DedicatedStudyRoomView
         studyRoom={activeRoom}
         user={user}
+        members={members}
         onLeaveRoom={onLeaveRoom}
         onEndChamber={() => onEndChamber?.(activeRoom.id)}
         onRewardXp={onRewardXp}
@@ -70,12 +79,37 @@ export const StudyRoomsView: React.FC<StudyRoomsViewProps> = ({
     window.open(url, '_blank');
   };
 
+  const handleOpenCreateModal = () => {
+    const nextId = `room-${Date.now().toString(36)}`;
+    setPendingRoomId(nextId);
+    // Pre-select other guild members by default for convenience
+    const otherMembers = members.filter((m) => m.name !== user.name).map((m) => m.name);
+    setSelectedInvites(otherMembers);
+    setIsCreating(true);
+  };
+
+  const toggleFriendInvite = (name: string) => {
+    setSelectedInvites((prev) =>
+      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
+    );
+  };
+
+  const handleSelectAllFriends = () => {
+    const otherMembers = members.filter((m) => m.name !== user.name).map((m) => m.name);
+    if (selectedInvites.length === otherMembers.length) {
+      setSelectedInvites([]);
+    } else {
+      setSelectedInvites(otherMembers);
+    }
+  };
+
   const handleCreateSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newRoomName.trim() || !newRoomTopic.trim()) return;
 
+    const roomId = pendingRoomId;
     const newChamber: StudyRoom = {
-      id: `room-${Date.now()}`,
+      id: roomId,
       name: newRoomName.trim(),
       topic: newRoomTopic.trim(),
       onlineCount: 1,
@@ -88,10 +122,11 @@ export const StudyRoomsView: React.FC<StudyRoomsViewProps> = ({
       isLive: true
     };
 
-    onCreateRoom?.(newChamber);
+    onCreateRoom?.(newChamber, selectedInvites);
     setIsCreating(false);
     setNewRoomName('');
     setNewRoomTopic('');
+    setSelectedInvites([]);
     onSelectRoom(newChamber.id);
   };
 
@@ -101,6 +136,8 @@ export const StudyRoomsView: React.FC<StudyRoomsViewProps> = ({
       r.topic.toLowerCase().includes(filterQuery.toLowerCase()) ||
       (r.tag && r.tag.toLowerCase().includes(filterQuery.toLowerCase()))
   );
+
+  const availableFriends = members.filter((m) => m.name !== user.name);
 
   return (
     <div className="space-y-6 p-4 sm:p-8 max-w-6xl mx-auto">
@@ -128,7 +165,7 @@ export const StudyRoomsView: React.FC<StudyRoomsViewProps> = ({
         {/* Action Buttons: Create Chamber & Search */}
         <div className="flex items-center gap-2.5 flex-wrap">
           <button
-            onClick={() => setIsCreating(true)}
+            onClick={handleOpenCreateModal}
             className="flex items-center gap-2 px-3.5 py-2 rounded-inner bg-teal-500 hover:bg-teal-400 text-[#070b13] font-bold text-xs transition-all shadow-sm active:scale-95"
           >
             <Plus className="w-4 h-4" />
@@ -215,7 +252,98 @@ export const StudyRoomsView: React.FC<StudyRoomsViewProps> = ({
                 </select>
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              {/* Invite Friends / Party Members Section */}
+              <div className="pt-2 border-t border-[#182030]">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-1.5">
+                    <UserPlus className="w-3.5 h-3.5 text-teal-400" />
+                    <label className="text-xs font-bold text-white">Invite Friends to Chamber</label>
+                  </div>
+                  {availableFriends.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleSelectAllFriends}
+                      className="text-[10px] font-mono text-teal-400 hover:text-teal-300"
+                    >
+                      {selectedInvites.length === availableFriends.length ? 'Clear All' : 'Select All'}
+                    </button>
+                  )}
+                </div>
+
+                {availableFriends.length > 0 ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-40 overflow-y-auto p-1 bg-[#090d16] rounded-inner border border-[#172235]">
+                    {availableFriends.map((friend) => {
+                      const isSelected = selectedInvites.includes(friend.name);
+                      return (
+                        <div
+                          key={friend.id}
+                          onClick={() => toggleFriendInvite(friend.name)}
+                          className={`p-2 rounded-inner border cursor-pointer flex items-center justify-between transition-colors ${
+                            isSelected
+                              ? 'bg-teal-950/50 border-teal-500/70 text-white'
+                              : 'bg-[#101624] border-[#1b2538] text-slate-400 hover:border-slate-600'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Avatar seed={friend.avatarSeed} size="xs" />
+                            <div className="min-w-0">
+                              <span className="text-xs font-semibold text-slate-200 block truncate leading-tight">
+                                {friend.name}
+                              </span>
+                              <span className="text-[10px] text-teal-400 font-mono block truncate">
+                                {friend.roleClass}
+                              </span>
+                            </div>
+                          </div>
+                          <div
+                            className={`w-4 h-4 rounded border flex items-center justify-center text-[10px] flex-shrink-0 ml-1 ${
+                              isSelected
+                                ? 'bg-teal-500 border-teal-400 text-[#070b13] font-bold'
+                                : 'border-slate-600'
+                            }`}
+                          >
+                            {isSelected && '✓'}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-slate-400">All party members are in your party.</p>
+                )}
+
+                <p className="text-[10px] text-slate-400 mt-1 font-mono">
+                  {selectedInvites.length > 0
+                    ? `⚡ ${selectedInvites.length} scholar${selectedInvites.length > 1 ? 's' : ''} will receive an instant join invite.`
+                    : 'No friends selected. You can also share the direct link below.'}
+                </p>
+              </div>
+
+              {/* Direct Shareable Chamber Link Preview */}
+              <div>
+                <label className="block text-[11px] font-mono text-slate-400 mb-1">
+                  Shareable Chamber URL (Direct Join)
+                </label>
+                <div className="p-2 rounded-inner bg-[#090d16] border border-[#1b2538] flex items-center justify-between gap-2">
+                  <span className="text-[10px] font-mono text-teal-300 truncate">
+                    {window.location.origin}/?room={pendingRoomId}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(`${window.location.origin}/?room=${pendingRoomId}`);
+                      setCopiedLink(true);
+                      setTimeout(() => setCopiedLink(false), 2000);
+                    }}
+                    className="px-2 py-1 rounded bg-[#131b2c] hover:bg-[#1a253c] border border-[#1f2d44] text-[10px] font-semibold text-teal-300 flex items-center gap-1 flex-shrink-0"
+                  >
+                    {copiedLink ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-teal-400" />}
+                    <span>{copiedLink ? 'Copied' : 'Copy'}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-[#182030]">
                 <button
                   type="button"
                   onClick={() => setIsCreating(false)}
@@ -225,9 +353,12 @@ export const StudyRoomsView: React.FC<StudyRoomsViewProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-1.5 rounded-inner bg-teal-500 hover:bg-teal-400 text-[#070b13] font-bold text-xs"
+                  className="px-4 py-2 rounded-inner bg-teal-500 hover:bg-teal-400 text-[#070b13] font-bold text-xs shadow-md transition-all active:scale-95 flex items-center gap-1.5"
                 >
-                  Open Chamber
+                  <Plus className="w-4 h-4" />
+                  <span>
+                    Open Chamber {selectedInvites.length > 0 ? `& Invite (${selectedInvites.length})` : ''}
+                  </span>
                 </button>
               </div>
             </form>

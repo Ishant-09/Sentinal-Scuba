@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Settings, Volume2, Bell, Shield, Palette, Sparkles, Save, Check, Sun, Moon } from 'lucide-react';
 import { UserProfile } from '../../types';
 import { Avatar } from '../common/Avatar';
+import { api } from '../../api/client';
 
 interface SettingsViewProps {
   user: UserProfile;
@@ -22,9 +23,15 @@ export const SettingsView: React.FC<SettingsViewProps> = ({
   const [streakReminders, setStreakReminders] = useState(true);
   const [saved, setSaved] = useState(false);
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     onUpdateUser({ name, roleClass });
+    try {
+      await api.users.updateMe({ name, roleClass });
+      await api.users.updateSettings({ soundEffects, streakReminders });
+    } catch {
+      // offline fallback
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
   };

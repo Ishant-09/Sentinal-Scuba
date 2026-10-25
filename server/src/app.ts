@@ -165,7 +165,13 @@ app.use('/api/v1/friends', friendRouter);
 app.use('/api/v1/search', searchRouter);
 
 // 3. Serve Frontend Production Build & SPA Fallback
-const clientDistPath = path.resolve(__dirname, '../../dist');
+const possibleDistPaths = [
+  path.resolve(__dirname, '../../../dist'),
+  path.resolve(__dirname, '../../dist'),
+  path.resolve(process.cwd(), 'dist')
+];
+const clientDistPath = possibleDistPaths.find((p) => fs.existsSync(p)) || possibleDistPaths[0];
+
 if (fs.existsSync(clientDistPath)) {
   app.use(express.static(clientDistPath));
   app.get('*', (req: Request, res: Response, next: NextFunction) => {

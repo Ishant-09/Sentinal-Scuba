@@ -8,8 +8,8 @@ GuildUp is a gamified full-stack multiplayer collaborative study platform. It co
 
 - **🏰 Guild Sanctum Login**: Instant username authentication, creating adventurer profiles on the fly without complex friction.
 - **📜 Quest & Curriculum Progression Board**: Complete trial milestones, earn XP for yourself and your guild, and trigger level-ups with celebration animations.
-- **🎨 Live Collaborative Whiteboard**: Real-time cross-device drawing sync (pen, highlighter, eraser,pencil, shapes, and sticky notes) with normalized coordinate scaling across all screen sizes.
-- **⏱️ Synchronized Pomodoro Study Chambers**: Real-time countdown timers synchronized across all devices in the room.
+- **🎨 Live Collaborative Whiteboard**: Real-time cross-device drawing sync (pen, highlighter, eraser, pencil, shapes, and sticky notes) with normalized coordinate scaling across all screen sizes.
+- **⏱️ Synchronized Pomodoro Study Chambers**: Keep focused together with countdown timers synchronized across every device in the room.
 - **💬 Real-Time Party Chat & Activity Feed**: Real-time messaging, typing indicators, reactions, and live presence tracking.
 - **🐉 Boss Raid Encounters**: Party-wide encounters against the Query Devourer with coordinated attacks and health sync.
 

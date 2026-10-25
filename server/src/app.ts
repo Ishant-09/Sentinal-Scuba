@@ -4,7 +4,13 @@ import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
 import os from 'os';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { env, allowedCorsOrigins } from './config/env.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 import { AppError } from './lib/errors.js';
 import { logger } from './lib/logger.js';
 import { prisma } from './lib/prisma.js';
@@ -158,7 +164,29 @@ app.use('/api/v1/achievements', achievementRouter);
 app.use('/api/v1/friends', friendRouter);
 app.use('/api/v1/search', searchRouter);
 
-// 3. 404 Handler
+// 3. Serve Frontend Production Build & SPA Fallback
+const possibleDistPaths = [
+  path.resolve(__dirname, '../../../dist'),
+  path.resolve(__dirname, '../../dist'),
+  path.resolve(process.cwd(), 'dist')
+];
+const clientDistPath = possibleDistPaths.find((p) => fs.existsSync(p)) || possibleDistPaths[0];
+
+if (fs.existsSync(clientDistPath)) {
+  app.use(express.static(clientDistPath));
+  app.get('*', (req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith('/api') || req.path.startsWith('/socket.io')) {
+      return next();
+    }
+    const indexPath = path.join(clientDistPath, 'index.html');
+    if (fs.existsSync(indexPath)) {
+      return res.sendFile(indexPath);
+    }
+    next();
+  });
+}
+
+// 4. 404 Handler
 app.use((req: Request, res: Response) => {
   res.status(404).json({
     error: {

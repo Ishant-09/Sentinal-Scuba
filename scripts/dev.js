@@ -1,39 +1,48 @@
-import { spawn, execSync } from 'child_process';
+import { spawn } from 'child_process';
 
 console.log('\x1b[36m%s\x1b[0m', '⚡ Launching GuildUp Full Stack (Backend + Frontend)...');
 
-// Clean up any stale process holding port 4000
-try {
-  const pids = execSync('lsof -ti:4000', { stdio: ['pipe', 'pipe', 'ignore'], encoding: 'utf8' }).trim();
-  if (pids) {
-    pids.split('\n').forEach((pid) => {
-      try {
-        process.kill(Number(pid), 'SIGKILL');
-      } catch {}
-    });
-  }
-} catch {}
-
-const server = spawn('npm', ['--prefix', 'server', 'run', 'dev'], {
+const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const npmOptions = {
   stdio: 'inherit',
-  shell: true
-});
-
-const client = spawn('npm', ['run', 'dev:client'], {
-  stdio: 'inherit',
-  shell: true
-});
-
-const cleanup = () => {
-  try {
-    server.kill('SIGINT');
-  } catch {}
-  try {
-    client.kill('SIGINT');
-  } catch {}
-  process.exit();
+  shell: process.platform === 'win32',
 };
 
-process.on('SIGINT', cleanup);
-process.on('SIGTERM', cleanup);
-process.on('exit', cleanup);
+const server = spawn(npmCommand, ['--prefix', 'server', 'run', 'dev'], npmOptions);
+const client = spawn(npmCommand, ['run', 'dev:client'], npmOptions);
+
+let shuttingDown = false;
+
+const shutdown = (signal) => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  server.kill(signal);
+  client.kill(signal);
+};
+
+for (const child of [server, client]) {
+  child.on('error', (error) => {
+    console.error(`Failed to start ${child === server ? 'server' : 'client'}:`, error);
+    process.exitCode = 1;
+    shutdown('SIGTERM');
+  });
+
+  child.on('close', (code, signal) => {
+    if (shuttingDown) return;
+    process.exitCode = code ?? 1;
+    if (signal) {
+      console.error(`${child === server ? 'Server' : 'Client'} stopped by ${signal}.`);
+    }
+    shutdown('SIGTERM');
+  });
+}
+
+process.on('SIGINT', () => {
+  process.exitCode = 130;
+  shutdown('SIGINT');
+});
+
+process.on('SIGTERM', () => {
+  process.exitCode = 143;
+  shutdown('SIGTERM');
+});
